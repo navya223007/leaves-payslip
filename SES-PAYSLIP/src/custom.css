@@ -1,0 +1,310 @@
+/* Layout */
+.app-container {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  min-height: 100vh;
+  background-color: #f8f9fa;
+}
+
+/* Header */
+.app-header {
+  background-color: #0f263f;
+  color: #ffffff;
+  padding: 15px 20px;
+  text-align: center;
+  position: relative;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive title */
+.header-title {
+  font-size: clamp(16px, 3vw, 28px);
+  padding: 0 50px;
+  margin: 0;
+}
+
+/* Hamburger */
+.hamburger-btn {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.4rem;
+  color: #ffffff;
+  background: none;
+  border: none;
+}
+
+/* Sidebar */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 220px;
+  height: 100%;
+  background-color: #082647;
+  color: #ffffff;
+  z-index: 1000;
+  padding-top: 60px;
+  transition: left 0.3s ease;
+}
+
+/* Sidebar list */
+.sidebar-nav {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-nav li {
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  border-left: 4px solid transparent;
+  transition: 0.3s;
+}
+
+.sidebar-nav li:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.sidebar-nav li.active {
+  background-color: rgba(255, 255, 255, 0.25);
+  border-left: 4px solid #ffffff;
+}
+
+/* Icons */
+.sidebar-nav li .icon {
+  font-size: 1.2rem;
+}
+
+/* Close button */
+.close-btn {
+  position: absolute;
+  top: 12px;
+  right: 15px;
+  font-size: 24px;
+  background: none;
+  border: none;
+  color: #ffffff;
+}
+
+.logout {
+  margin-top: auto;
+  color: #ff4d4f;
+  font-weight: bold;
+}
+
+.logout:hover {
+  background-color: #ffeaea;
+  color: #d9363e;
+}
+/* Main content */
+.main-content {
+  margin-left: 220px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  transition: 0.3s;
+}
+
+/* Message */
+.message {
+  margin: 15px 20px;
+  padding: 12px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.message.error {
+  background-color: #f8d7da;
+}
+
+.message.success {
+  background-color: #d4edda;
+}
+
+/* Tab content */
+.tab-content {
+  margin: 15px auto; /* center horizontally */
+  /* max-width: 1000px; control width */
+  width: 100%;
+  width: 100%;
+  padding: 15px;
+  background: #ffffff;
+  border-radius: 8px;
+}
+
+/* Payment Summary Tab */
+
+/* View Button */
+.action-btn {
+  border: none;
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  /* background-color: #f1f3f5;
+  color: #333; */
+  background-color: #165ca3;
+  color: #fff;
+  transition: all 0.2s ease;
+}
+
+/* View */
+.view-btn:hover {
+  background-color: #d0ebff;
+  color: #1864ab;
+}
+
+/* Edit */
+.edit-btn:hover {
+  background-color: #fff3bf;
+  color: #e67700;
+}
+
+/* Delete */
+.delete-btn:hover {
+  background-color: #ffe3e3;
+  color: #c92a2a;
+} /* ================= MOBILE ================= */
+@media (max-width: 767px) {
+  .app-container {
+    display: block;
+  }
+
+  /* Sidebar overlay */
+  .sidebar {
+    left: -220px;
+  }
+
+  .sidebar.open {
+    left: 0;
+  }
+
+  /* Content full width */
+  .main-content {
+    margin-left: 0;
+    padding: 10px;
+  }
+
+  /* Header fix */
+  .app-header {
+    padding: 12px;
+  }
+
+  /* Title smaller */
+  .header-title {
+    font-size: clamp(14px, 4vw, 20px);
+    padding: 0 40px;
+  }
+
+  /* Tab spacing */
+  .tab-content {
+    margin: 10px;
+    padding: 15px;
+  }
+
+  /* Message spacing */
+  .message {
+    margin: 10px;
+  }
+}
+/* empolyeelist  stared */
+/* ================= TABLE ================= */
+.custom-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+/* Header */
+.custom-table thead {
+  background-color: #1f2937; /* dark */
+}
+
+.custom-table th {
+  color: #ffffff;
+  padding: 12px;
+  text-align: center;
+  border: 1px solid #ddd;
+}
+
+/* Body cells */
+.custom-table td {
+  padding: 10px;
+  border: 1px solid #eee;
+  text-align: center;
+}
+
+/* Alternate row colors */
+.custom-table tbody tr:nth-child(odd) {
+  background-color: #f9fafb;
+}
+
+.custom-table tbody tr:nth-child(even) {
+  background-color: #ffffff;
+}
+
+/* Row hover */
+.custom-table tbody tr:hover {
+  background-color: #e6f0ff;
+  transition: 0.2s;
+}
+
+/* ================= PF BADGE ================= */
+.pf-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pf-yes {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.pf-no {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+/* ================= ACTION BUTTONS ================= */
+.action-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Common button style */
+
+/*  */
+
+/* ================= DESKTOP ================= */
+@media (min-width: 768px) {
+  .sidebar {
+    left: 0;
+  }
+
+  .main-content {
+    margin-left: 220px;
+  }
+
+  .hamburger-btn {
+    display: none;
+  }
+
+  .close-btn {
+    display: none;
+  }
+}
