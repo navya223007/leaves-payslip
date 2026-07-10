@@ -2,7 +2,8 @@
 // No separate login, no separate sidebar. Uses top-navbar for payslip tabs.
 
 import React, { useState, useEffect, useCallback } from "react";
-import axios from "axios";
+// import axios from "axios";
+import api from "../api/axiosConfig";
 import { useNavigate } from "react-router-dom";
 import {
   FaUsers, FaFileInvoiceDollar, FaMoneyCheckAlt, FaChartBar,
@@ -14,8 +15,8 @@ import PayslipGeneration from "./PayslipGeneration";
 import ReadEmployeePage from "./ReadEmpolyePage";
 import "./payslip.css";
 
-const API_BASE_URL = "http://localhost:7014/api";
-
+// const API_BASE_URL = "http://localhost:7014/api";
+const API_BASE_URL = "/api";
 const TABS = [
   { key: "employees",    label: "Employee Management", icon: FaUsers },
   { key: "payslips",     label: "Generate Payslip",    icon: FaFileInvoiceDollar },
@@ -99,25 +100,47 @@ function PayslipApp() {
 
   const calculatePF = (basic, applicable) => applicable ? parseFloat(basic)*0.12 : 0;
 
-  const fetchEmployees = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get(`${API_BASE_URL}/employees`);
-      setEmployees(res.data.map(e => ({
-        ...e,
-        date_of_joining: e.date_of_joining
-          ? (() => { const d = new Date(e.date_of_joining); return isNaN(d) ? e.date_of_joining : `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`; })()
-          : ""
-      })));
-    } catch { setMessage({ type:"error", text:"Error fetching employees" }); }
-    setLoading(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // const fetchEmployees = useCallback(async () => {
+  //   setLoading(true);
+  //   try {
+  //     const res = await api.get(`${API_BASE_URL}/employees`);
+  //     setEmployees(res.data.map(e => ({
+  //       ...e,
+  //       date_of_joining: e.date_of_joining
+  //         ? (() => { const d = new Date(e.date_of_joining); return isNaN(d) ? e.date_of_joining : `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`; })()
+  //         : ""
+  //     })));
+  //   } catch { setMessage({ type:"error", text:"Error fetching employees" }); }
+  //   setLoading(false);
+  // // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, []);
+const fetchEmployees = useCallback(async () => {
+  setLoading(true);
+  try {
+    const res = await api.get(`${API_BASE_URL}/employees`);
+    // Ensure we always have an array - handle null/undefined/object
+    let employeeData = [];
+    if (res.data) {
+      employeeData = Array.isArray(res.data) ? res.data : [];
+    }
+    setEmployees(employeeData.map(e => ({
+      ...e,
+      date_of_joining: e.date_of_joining
+        ? (() => { const d = new Date(e.date_of_joining); return isNaN(d) ? e.date_of_joining : `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`; })()
+        : ""
+    })));
+  } catch (error) {
+    console.error("Error fetching employees:", error);
+    setEmployees([]);
+    setMessage({ type: "error", text: "Error fetching employees" });
+  }
+  setLoading(false);
+}, []);
 
   const fetchPayslips = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE_URL}/payslips/${reportFilters.year}/${reportFilters.month}`);
+      const res = await api.get(`${API_BASE_URL}/payslips/${reportFilters.year}/${reportFilters.month}`);
       setPayslips(res.data);
     } catch { setMessage({ type:"error", text:"Error fetching payslips" }); }
     setLoading(false);
@@ -173,10 +196,10 @@ function PayslipApp() {
     try {
       const data = { ...employeeForm, date_of_joining: convertToDBFormat(employeeForm.date_of_joining) };
       if (editingEmployee) {
-        await axios.put(`${API_BASE_URL}/employees/${employeeForm.emp_id}`, data);
+        await api.put(`${API_BASE_URL}/employees/${employeeForm.emp_id}`, data);
         showMessage("success","Employee updated successfully");
       } else {
-        await axios.post(`${API_BASE_URL}/employees`, data);
+        await api.post(`${API_BASE_URL}/employees`, data);
         showMessage("success","Employee created successfully");
       }
       fetchEmployees(); resetEmployeeForm();
@@ -189,7 +212,7 @@ function PayslipApp() {
   const deleteEmployee = async (emp_id) => {
     if (!window.confirm("Delete this employee?")) return;
     setLoading(true);
-    try { await axios.delete(`${API_BASE_URL}/employees/${emp_id}`); showMessage("success","Employee deleted"); fetchEmployees(); }
+    try { await api.delete(`${API_BASE_URL}/employees/${emp_id}`); showMessage("success","Employee deleted"); fetchEmployees(); }
     catch { showMessage("error","Error deleting employee"); }
     setLoading(false);
   };
@@ -197,7 +220,7 @@ function PayslipApp() {
   const deletePayslip = async (id) => {
     if (!window.confirm("Delete this payslip?")) return;
     setLoading(true);
-    try { await axios.delete(`${API_BASE_URL}/payslips/${id}`); showMessage("success","Payslip deleted"); fetchPayslips(); }
+    try { await api.delete(`${API_BASE_URL}/payslips/${id}`); showMessage("success","Payslip deleted"); fetchPayslips(); }
     catch { showMessage("error","Error deleting payslip"); }
     setLoading(false);
   };
@@ -206,7 +229,7 @@ function PayslipApp() {
     if (!blkpayFilters.month || !blkpayFilters.year) { showMessage("error","Please select month and year"); return; }
     setLoading(true);
     try {
-      const res = await axios.post(`${API_BASE_URL}/employees/download-excel`,
+      const res = await api.post(`${API_BASE_URL}/employees/download-excel`,
         { month: blkpayFilters.month, year: blkpayFilters.year },
         { responseType:"blob", timeout:30000 });
       const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -221,24 +244,37 @@ function PayslipApp() {
     setLoading(false);
   };
 
-  const handleViewPayslip = (payslip) => {
-    const viewData = {
-      id: payslip.emp_id, name: payslip.name||"", designation: payslip.designation||"",
-      month: months.find(m=>m.value===parseInt(payslip.salary_month))?.label||"Unknown",
-      year: payslip.salary_year||new Date().getFullYear(),
-      generatedDate: new Date().toLocaleDateString(),
-      paidDays: payslip.paid_days||0, pan: payslip.PAN||"N/A",
-      grossAfterAttendance: payslip.gross_salary||0, pf: payslip.pf_deduction||0,
-      professionalTax: payslip.professional_tax_deduction||0, advance: payslip.advance_salary||0,
-      performanceBonus: payslip.performance_bonus||0, arrears: payslip.arrears||0,
-      pf_applicable: payslip.pf_applicable||false,
-      bank_account: payslip.bank_account_number||"", ifsc: payslip.IFSC_code||"",
-      bank_name: payslip.bank_name||"", holidays: payslip.holidays||0, leaves: payslip.leaves||0,
-      returnTab: "payslips",
-    };
-    navigate("/admin/payslips/view-pdf", { state: viewData });
+const handleViewPayslip = (payslip) => {
+  const viewData = {
+    id: payslip.emp_id,
+    name: payslip.name || "",
+    designation: payslip.designation || "",
+    month: months.find(m => m.value === parseInt(payslip.salary_month))?.label || "Unknown",
+    year: payslip.salary_year || new Date().getFullYear(),
+    generatedDate: new Date().toLocaleDateString(),
+    paidDays: payslip.paid_days || 0,
+    pan: payslip.PAN || "N/A",
+    grossAfterAttendance: payslip.gross_salary || 0,
+    pf: payslip.pf_deduction || 0,
+    professionalTax: payslip.professional_tax_deduction || 0,
+    advance: payslip.advance_salary || 0,
+    performanceBonus: payslip.performance_bonus || 0,
+    arrears: payslip.arrears || 0,
+    pf_applicable: payslip.pf_applicable || false,
+    bank_account: payslip.bank_account_number || "",
+    ifsc: payslip.IFSC_code || "",
+    bank_name: payslip.bank_name || "",
+    holidays: payslip.holidays || 0,
+    leaves: payslip.leaves || 0,
+    returnTab: "payslips",
   };
-
+  
+  console.log("🔍🔍🔍 PayslipApp - View Data:", viewData);
+  console.log("🔍🔍🔍 PayslipApp - Navigating to: /admin/payslips/view-pdf");
+  
+  // Use replace: true to force a fresh render
+    navigate(`/admin/payslips/view-pdf/${payslip.id}`);
+};
   const handleEditPayslip = (payslip) => {
     const editData = {
       emp_id: payslip.emp_id, salary_month: parseInt(payslip.salary_month),
@@ -258,15 +294,24 @@ function PayslipApp() {
   };
 
   const fetchMonthlyReport = async () => {
-    setLoading(true);
-    try { const res = await axios.get(`${API_BASE_URL}/reports/monthly/${reportFilters.year}/${reportFilters.month}`); setReports(res.data); }
-    catch { showMessage("error","Error fetching monthly report"); }
-    setLoading(false);
-  };
+  setLoading(true);
+  try {
+    const res = await api.get(`${API_BASE_URL}/reports/monthly/${reportFilters.year}/${reportFilters.month}`);
+    // Ensure details is always an array
+    const data = res.data;
+    if (data && data.details) {
+      data.details = Array.isArray(data.details) ? data.details : [];
+    }
+    setReports(data);
+  } catch { 
+    setMessage({ type: "error", text: "Error fetching monthly report" }); 
+  }
+  setLoading(false);
+};
 
   const fetchYearlyReport = async () => {
     setLoading(true);
-    try { const res = await axios.get(`${API_BASE_URL}/reports/yearly/${reportFilters.year}`); setReports(res.data); }
+    try { const res = await api.get(`${API_BASE_URL}/reports/yearly/${reportFilters.year}`); setReports(res.data); }
     catch { showMessage("error","Error fetching yearly report"); }
     setLoading(false);
   };
@@ -274,7 +319,7 @@ function PayslipApp() {
   const fetchEmployeeHistory = async () => {
     if (!reportFilters.emp_id) { showMessage("error","Please select an employee"); return; }
     setLoading(true);
-    try { const res = await axios.get(`${API_BASE_URL}/reports/employee/${reportFilters.emp_id}`); setReports(res.data); }
+    try { const res = await api.get(`${API_BASE_URL}/reports/employee/${reportFilters.emp_id}`); setReports(res.data); }
     catch { showMessage("error","Error fetching employee history"); }
     setLoading(false);
   };
@@ -528,7 +573,7 @@ function PayslipApp() {
               <select className="form-select" value={reportFilters.emp_id}
                 onChange={e=>setReportFilters({...reportFilters,emp_id:e.target.value})}>
                 <option value="">All Employees</option>
-                {employees.map(e=><option key={e.emp_id} value={e.emp_id}>{e.name}</option>)}
+                {Array.isArray(employees) && employees.map(e=><option key={e.emp_id} value={e.emp_id}>{e.name}</option>)}
               </select>
             </div>
             <div className="d-flex gap-2 align-self-end">
@@ -537,23 +582,32 @@ function PayslipApp() {
               <button className="btn btn-info text-white" onClick={fetchEmployeeHistory}>Employee History</button>
             </div>
           </div>
-          {reports && reports.details && (
-            <div>
-              <h4>Monthly Report — {months.find(m=>m.value===parseInt(reportFilters.month))?.label} {reportFilters.year}</h4>
-              <p>Total Employees: {reports.summary?.totalEmployees} | Total Net: ₹{reports.summary?.totalNetSalary?.toFixed(2)}</p>
-              <div className="table-responsive">
-                <table className="table table-bordered table-sm text-center">
-                  <thead className="table-dark"><tr><th>Emp ID</th><th>Name</th><th>Designation</th><th>PF</th><th>Gross</th><th>Net</th></tr></thead>
-                  <tbody>{reports.details.map((d,i)=>(
-                    <tr key={i}><td>{d.emp_id}</td><td>{d.name}</td><td>{d.designation}</td>
-                      <td>{d.pf_applicable?"Yes":"No"}</td>
-                      <td>₹{parseFloat(d.gross_salary).toFixed(2)}</td>
-                      <td>₹{parseFloat(d.net_salary).toFixed(2)}</td></tr>
-                  ))}</tbody>
-                </table>
-              </div>
-            </div>
-          )}
+         {reports && reports.details && (
+  <div>
+    <h4>Monthly Report — {months.find(m=>m.value===parseInt(reportFilters.month))?.label} {reportFilters.year}</h4>
+    <p>Total Employees: {reports.summary?.totalEmployees} | Total Net: ₹{reports.summary?.totalNetSalary?.toFixed(2)}</p>
+    <div className="table-responsive">
+      <table className="table table-bordered table-sm text-center">
+        <thead className="table-dark">
+          <tr><th>Emp ID</th><th>Name</th><th>Designation</th><th>PF</th><th>Gross</th><th>Net</th></tr>
+        </thead>
+        <tbody>
+          {/* ADD THE ARRAY CHECK HERE */}
+          {Array.isArray(reports.details) && reports.details.map((d,i) => (
+            <tr key={i}>
+              <td>{d.emp_id}</td>
+              <td>{d.name}</td>
+              <td>{d.designation}</td>
+              <td>{d.pf_applicable ? "Yes" : "No"}</td>
+              <td>₹{parseFloat(d.gross_salary).toFixed(2)}</td>
+              <td>₹{parseFloat(d.net_salary).toFixed(2)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
         </div>
       )}
 
@@ -574,7 +628,7 @@ function PayslipApp() {
                       </tr>
                     </thead>
                     <tbody>
-                      {employees.map((emp,i) => {
+                      {Array.isArray(employees) && employees.map((emp,i) => {
                         const gross = Number(emp.basic_salary||0)+Number(emp.house_rent_allowence||0)+
                           Number(emp.transport_allowance||0)+Number(emp.internet_allowance||0)+Number(emp.medical_allowance||0);
                         return (

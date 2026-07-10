@@ -1,10 +1,12 @@
 import React, { useEffect, useState, useCallback } from "react";
-import axios from "axios";
+// import axios from "axios";
+import api from "../api/axiosConfig";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 
-const PAYSLIP_API_URL = "http://localhost:7014/api";
-
+const PAYSLIP_API_URL = process.env.NODE_ENV === 'development' 
+  ? "http://localhost:7014/api" 
+  : "/api";
 const months = [
   { value: 1, label: "January" },  { value: 2, label: "February" },
   { value: 3, label: "March" },    { value: 4, label: "April" },
@@ -27,24 +29,28 @@ function DownloadPayslips() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchPayslips = useCallback(async () => {
-    if (!user?.emp_id) return;
-    setLoading(true);
-    setError("");
-    try {
-      const [payslipRes, empRes] = await Promise.all([
-        axios.get(`${PAYSLIP_API_URL}/payslips/employee/${user.emp_id}`),
-        axios.get(`${PAYSLIP_API_URL}/employees/${user.emp_id}`),
-      ]);
-      setAllPayslips(payslipRes.data || []);
-      setEmployeeDetails(empRes.data || null);
-    } catch (err) {
-      console.error("Error fetching payslips:", err);
-      setError("Failed to load payslip data.");
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
+const fetchPayslips = useCallback(async () => {
+  if (!user?.emp_id) return;
+  setLoading(true);
+  setError("");
+  try {
+    const [payslipRes, empRes] = await Promise.all([
+      api.get(`${PAYSLIP_API_URL}/payslips/employee/${user.emp_id}`, {
+        withCredentials: true  // ✅ Add this
+      }),
+      api.get(`${PAYSLIP_API_URL}/employees/${user.emp_id}`, {
+        withCredentials: true  // ✅ Add this
+      }),
+    ]);
+    setAllPayslips(payslipRes.data || []);
+    setEmployeeDetails(empRes.data || null);
+  } catch (err) {
+    console.error("Error fetching payslips:", err);
+    setError("Failed to load payslip data.");
+  } finally {
+    setLoading(false);
+  }
+}, [user]);
 
   useEffect(() => { fetchPayslips(); }, [fetchPayslips]);
 

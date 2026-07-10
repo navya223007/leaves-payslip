@@ -3,8 +3,9 @@ import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 
 function ViewEmployee() {
-  const API = `http://${window.location.hostname}:7013`;
-
+  // const API = `http://localhost:7015`;
+// const API = `http://localhost:7015`;
+const API = ``;
   const { id } = useParams();
   const navigate = useNavigate();
   const [emp, setEmp] = useState(null);

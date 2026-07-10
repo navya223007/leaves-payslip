@@ -2,7 +2,6 @@ import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import Login from "./Login";
-
 import AdminLayout from "./AdminLayout";
 import AdminDashboard from "./AdminDashboard";
 import Employees from "./Employees";
@@ -21,7 +20,7 @@ import EmployeeDailyStatusReport from "./EmployeeDailyStatusReport";
 import ChangePassword from "./ChangePassword";
 import DownloadPayslips from "./DownloadPayslips";
 import PayslipApp from "../payslip/PayslipApp";
-import ViewPDFWrapper from "../payslip/ViewPDFWrapper";
+import ViewPDF from "../payslip/ViewPDF";
 import EmployeeViewPDF from "../payslip/EmployeeViewPDF";
 
 import ProtectedRoute from "./ProtectedRoute";
@@ -52,7 +51,8 @@ function RouterPage() {
         <Route path="employee-status" element={<AdminEmployeeStatus />} />
         <Route path="change-password" element={<ChangePassword />} />
         <Route path="payslips" element={<PayslipApp />} />
-        <Route path="payslips/view-pdf" element={<ViewPDFWrapper />} />
+{/* // Remove the :id from route */}
+<Route path="payslips/view-pdf" element={<ViewPDF />} />
       </Route>
 
       {/* EMPLOYEE ROUTES */}

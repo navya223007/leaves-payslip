@@ -20,7 +20,7 @@ import PayslipGeneration from "./PayslipGeneration";
 import ViewPDF from "./ViewPDF";
 import LoginPage from "./LoginPage";
 
-const API_BASE_URL = "http://192.168.29.239:7008/api";
+const API_BASE_URL = "/api";
 
 // Main App component with routing
 function AppContent() {
@@ -139,7 +139,7 @@ function AppContent() {
   //     if (!credentials || !credentials.username || !credentials.password) {
   //       throw new Error("Invalid credentials format");
   //     }
-  //     const response = await fetch("http://192.168.29.239:7008/api/login", {
+  //     const response = await fetch("http://192.168.29.239:7014/api/login", {
   //       method: "POST",
   //       headers: {
   //         "Content-Type": "application/json",
@@ -232,7 +232,7 @@ function AppContent() {
   // Show message helper
   const showMessage = (type, text) => {
     setMessage({ type, text });
-    setTimeout(() => setMessage({ type: "", text: "" }), 7008);
+    setTimeout(() => setMessage({ type: "", text: "" }), 7014);
   };
 
   // Fetch all employees

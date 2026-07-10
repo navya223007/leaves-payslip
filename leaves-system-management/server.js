@@ -1,36 +1,34 @@
 require("dotenv").config();
 const express = require("express");
+const cors = require("cors");
 const mysql = require("mysql2");
 // const cors = require("cors"); // Removed unused package
 const jwt = require("jsonwebtoken");
 const path = require("path");
 const cookieParser = require("cookie-parser");
-
+const axios = require('axios');
 console.log("========================================");
 console.log("🚀 STARTING SERVER VERSION 5.0 🚀");
 console.log("========================================");
-
+const PAYSLIP_API_URL = 'http://localhost:7014/api';
 const app = express();
 app.get("/api/health", (req, res) => res.json({ version: "5.0", status: "ok" }));
 const SECRET_KEY = process.env.JWT_SECRET || "your_jwt_secret";
 
 // ================= MIDDLEWARE =================
 // Allow requests from any origin (all devices/IPs on the network)
+// In payslip server (server.js)
+app.use(cors({
+  origin: '*',
+  credentials: true,
+}));
+
+// In HRMS server (server.js)
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  console.log("🔍 CORS Origin:", origin);
-  if (origin) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  } else {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-  }
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
   next();
 });
 
@@ -167,11 +165,13 @@ app.post("/login", (req, res) => {
 });
 
 // 🔥 NEW AUTH VERIFICATION ROUTE
+// ✅ Add verifyToken middleware
 app.get("/api/auth/verify", verifyToken, (req, res) => {
   console.log("✅ Token verified for user:", req.user.emp_id);
   res.json({ user: req.user });
 });
 
+// ✅ Add verifyToken middleware here too
 app.get("/auth/verify", verifyToken, (req, res) => {
   console.log("✅ Token verified for user (alias):", req.user.emp_id);
   res.json({ user: req.user });
@@ -184,12 +184,12 @@ app.post("/api/auth/logout", (req, res) => {
   res.json({ message: "Logged out successfully" });
 });
 
-app.get("/profile", verifyToken, (req, res) => {
+app.get("/profile", (req, res) => {
   res.json({ message: "Protected data", user: req.user });
 });
 
 // ================= EMPLOYEE APIs =================
-app.post("/create-employees", verifyToken, (req, res) => {
+app.post("/create-employees", (req, res) => {
   console.log("📝 Create Employee Body:", req.body);
   const userRole = (req.user.role || "").toString().trim().toLowerCase();
   console.log("👤 User Role:", userRole);
@@ -304,7 +304,7 @@ app.post("/create-employees", verifyToken, (req, res) => {
   });
 });
 
-app.get("/employees-reports", verifyToken, (req, res) => {
+app.get("/employees-reports", (req, res) => {
   db.query(
     "SELECT id, emp_id, name, email, role, department, subDepartment, employeeType FROM users",
     (err, result) => {
@@ -314,7 +314,7 @@ app.get("/employees-reports", verifyToken, (req, res) => {
   );
 });
 
-app.get("/employees/:id", verifyToken, (req, res) => {
+app.get("/employees/:id", (req, res) => {
   db.query("SELECT * FROM users WHERE id=?", [req.params.id], (err, result) => {
     if (err) return res.status(500).json(err);
     if (result.length === 0)
@@ -323,7 +323,7 @@ app.get("/employees/:id", verifyToken, (req, res) => {
   });
 });
 
-app.put("/employees/:id", verifyToken, (req, res) => {
+app.put("/employees/:id", (req, res) => {
   const d = req.body;
   const sql = `
     UPDATE users 
@@ -350,7 +350,7 @@ app.put("/employees/:id", verifyToken, (req, res) => {
   );
 });
 
-app.delete("/employees/:id", verifyToken, (req, res) => {
+app.delete("/employees/:id", (req, res) => {
   db.query("DELETE FROM users WHERE id=?", [req.params.id], (err) => {
     if (err) return res.status(500).json(err);
     res.json({ message: "Employee deleted successfully" });
@@ -358,7 +358,7 @@ app.delete("/employees/:id", verifyToken, (req, res) => {
 });
 
 // ================= LEAVE APIs =================
-app.post("/api/leaves/apply", verifyToken, (req, res) => {
+app.post("/api/leaves/apply", (req, res) => {
   const d = req.body;
   const sql = `
     INSERT INTO leaves
@@ -387,7 +387,7 @@ app.post("/api/leaves/apply", verifyToken, (req, res) => {
   );
 });
 
-app.put("/api/leaves/update/:id", verifyToken, (req, res) => {
+app.put("/api/leaves/update/:id", (req, res) => {
   const d = req.body;
   const sql = `
     UPDATE leaves 
@@ -418,7 +418,7 @@ app.put("/api/leaves/update/:id", verifyToken, (req, res) => {
   );
 });
 
-app.get("/api/leaves/employee/:emp_id", verifyToken, (req, res) => {
+app.get("/api/leaves/employee/:emp_id", (req, res) => {
   db.query(
     "SELECT * FROM leaves WHERE emp_id=? AND (employee_checked IS NULL OR employee_checked=0) ORDER BY id DESC",
     [req.params.emp_id],
@@ -513,7 +513,7 @@ app.get("/api/leaves/report", verifyToken, (req, res) => {
 });
 
 // ================= DASHBOARD APIs =================
-app.get("/api/dashboard/admin-counts", verifyToken, (req, res) => {
+app.get("/api/dashboard/admin-counts", (req, res) => {
   db.query(
     "SELECT SUM(status='pending') AS pending, SUM(status='approved') AS approved, SUM(status='rejected') AS rejected FROM leaves",
     (err, result) => {
@@ -524,7 +524,7 @@ app.get("/api/dashboard/admin-counts", verifyToken, (req, res) => {
 });
 
 // ================= DAILY STATUS APIs =================
-app.post("/api/daily-status", verifyToken, (req, res) => {
+app.post("/api/daily-status", (req, res) => {
   const d = req.body;
   db.query(
     "INSERT INTO daily_status (emp_id, project_name, subtask, assigned_by, status_date, status_month, status_year) VALUES (?, ?, ?, ?, CURDATE(), MONTH(CURDATE()), YEAR(CURDATE()))",
@@ -536,7 +536,7 @@ app.post("/api/daily-status", verifyToken, (req, res) => {
   );
 });
 
-app.get("/api/daily-status/report", verifyToken, (req, res) => {
+app.get("/api/daily-status/report", (req, res) => {
   const { emp_id, month, status } = req.query;
   let sql =
     "SELECT d.*, u.name, u.department FROM daily_status d LEFT JOIN users u ON d.emp_id=u.emp_id WHERE 1=1";
@@ -565,7 +565,7 @@ app.get("/api/daily-status/report", verifyToken, (req, res) => {
   });
 });
 
-app.put("/api/daily-status/update/:id", verifyToken, (req, res) => {
+app.put("/api/daily-status/update/:id", (req, res) => {
   const { project_name, subtask, assigned_by } = req.body;
   const sql =
     "UPDATE daily_status SET project_name=?, subtask=?, assigned_by=? WHERE id=?";
@@ -575,7 +575,7 @@ app.put("/api/daily-status/update/:id", verifyToken, (req, res) => {
   });
 });
 
-app.put("/api/daily-status/approve/:id", verifyToken, (req, res) => {
+app.put("/api/daily-status/approve/:id", (req, res) => {
   db.query(
     "UPDATE daily_status SET status='approved' WHERE id=?",
     [req.params.id],
@@ -586,7 +586,7 @@ app.put("/api/daily-status/approve/:id", verifyToken, (req, res) => {
   );
 });
 
-app.put("/api/daily-status/reject/:id", verifyToken, (req, res) => {
+app.put("/api/daily-status/reject/:id", (req, res) => {
   db.query(
     "UPDATE daily_status SET status='rejected' WHERE id=?",
     [req.params.id],
@@ -596,7 +596,282 @@ app.put("/api/daily-status/reject/:id", verifyToken, (req, res) => {
     },
   );
 });
+// ================= PROXY ROUTES FOR PAYSLIP SERVER =================
 
+// Proxy all employee-related requests to payslip server
+app.use('/api/employees', async (req, res) => {
+  try {
+    // Remove '/api' from originalUrl since PAYSLIP_API_URL already has it
+    const pathWithoutApi = req.originalUrl.replace('/api', '');
+    const targetUrl = `${PAYSLIP_API_URL}${pathWithoutApi}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    const response = await axios({
+      method: req.method,
+      url: targetUrl,
+      data: req.body,
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('❌ Proxy error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to fetch from payslip server',
+      details: error.message
+    });
+  }
+});
+
+// Proxy all payslip-related requests to payslip server
+// In HRMS server, modify the payslip proxy route
+// Proxy specific payslip routes
+app.get('/api/payslips/employee/:emp_id', async (req, res) => {
+  try {
+    const { emp_id } = req.params;
+    const targetUrl = `${PAYSLIP_API_URL}/payslips/employee/${emp_id}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    
+    const response = await axios.get(targetUrl);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('❌ Proxy error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to fetch from payslip server',
+      details: error.message
+    });
+  }
+});
+
+app.get('/api/payslips/test', async (req, res) => {
+  try {
+    const targetUrl = `${PAYSLIP_API_URL}/payslips/test`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    
+    const response = await axios.get(targetUrl);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('❌ Proxy error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to fetch from payslip server',
+      details: error.message
+    });
+  }
+});
+// Proxy payslip generation
+app.post('/api/payslip/generate', async (req, res) => {
+  try {
+    const targetUrl = `${PAYSLIP_API_URL}${req.originalUrl}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    
+    const response = await axios.post(targetUrl, req.body);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('❌ Payslip generation error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to generate payslip',
+      details: error.message
+    });
+  }
+});
+
+// Proxy payslip PDF generation
+app.post('/api/payslip/pdf', async (req, res) => {
+  try {
+    const targetUrl = `${PAYSLIP_API_URL}${req.originalUrl}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    
+    const response = await axios({
+      method: 'post',
+      url: targetUrl,
+      data: req.body,
+      responseType: 'stream'
+    });
+    
+    res.setHeader('Content-Type', response.headers['content-type']);
+    res.setHeader('Content-Disposition', response.headers['content-disposition']);
+    response.data.pipe(res);
+  } catch (error) {
+    console.error('❌ PDF generation error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to generate PDF',
+      details: error.message
+    });
+  }
+});
+
+// Proxy payslip save
+app.post('/api/payslips/save', async (req, res) => {
+  try {
+    const pathWithoutApi = req.originalUrl.replace('/api', '');
+    const targetUrl = `${PAYSLIP_API_URL}${pathWithoutApi}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    const response = await axios.post(targetUrl, req.body);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('❌ Payslip save error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to save payslip',
+      details: error.message
+    });
+  }
+});
+
+// Proxy payslip update
+app.put('/api/payslips/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const targetUrl = `${PAYSLIP_API_URL}${req.originalUrl}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    
+    const response = await axios.put(targetUrl, req.body);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('❌ Payslip update error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to update payslip',
+      details: error.message
+    });
+  }
+});
+
+// Proxy payslip delete
+app.delete('/api/payslips/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const targetUrl = `${PAYSLIP_API_URL}${req.originalUrl}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    
+    const response = await axios.delete(targetUrl);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('❌ Payslip delete error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to delete payslip',
+      details: error.message
+    });
+  }
+});
+
+// Proxy reports
+app.get('/api/reports/monthly/:year/:month', async (req, res) => {
+  try {
+    const pathWithoutApi = req.originalUrl.replace('/api', '');
+    const targetUrl = `${PAYSLIP_API_URL}${pathWithoutApi}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    const response = await axios.get(targetUrl);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('❌ Monthly report error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to fetch monthly report',
+      details: error.message
+    });
+  }
+});
+
+app.get('/api/reports/yearly/:year', async (req, res) => {
+  try {
+    const { year } = req.params;
+    const targetUrl = `${PAYSLIP_API_URL}${req.originalUrl}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    
+    const response = await axios.get(targetUrl);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('❌ Yearly report error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to fetch yearly report',
+      details: error.message
+    });
+  }
+});
+
+app.get('/api/reports/employee/:emp_id', async (req, res) => {
+  try {
+    const { emp_id } = req.params;
+    const targetUrl = `${PAYSLIP_API_URL}${req.originalUrl}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    
+    const response = await axios.get(targetUrl);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('❌ Employee history error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to fetch employee history',
+      details: error.message
+    });
+  }
+});
+
+// Proxy BLKPAY Excel download
+app.post('/api/employees/download-excel', async (req, res) => {
+  try {
+    const targetUrl = `${PAYSLIP_API_URL}${req.originalUrl}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    
+    const response = await axios({
+      method: 'post',
+      url: targetUrl,
+      data: req.body,
+      responseType: 'stream'
+    });
+    
+    res.setHeader('Content-Type', response.headers['content-type']);
+    res.setHeader('Content-Disposition', response.headers['content-disposition']);
+    response.data.pipe(res);
+  } catch (error) {
+    console.error('❌ Excel download error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to download Excel',
+      details: error.message
+    });
+  }
+});
+
+// Proxy payment summary PDF
+app.post('/api/payment-summary/pdf', async (req, res) => {
+  try {
+    const targetUrl = `${PAYSLIP_API_URL}${req.originalUrl}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    
+    const response = await axios({
+      method: 'post',
+      url: targetUrl,
+      data: req.body,
+      responseType: 'stream'
+    });
+    
+    res.setHeader('Content-Type', response.headers['content-type']);
+    res.setHeader('Content-Disposition', response.headers['content-disposition']);
+    response.data.pipe(res);
+  } catch (error) {
+    console.error('❌ Payment summary PDF error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to generate payment summary PDF',
+      details: error.message
+    });
+  }
+});
+
+// Proxy earnings endpoint
+app.get('/api/employees/:emp_id/earnings', async (req, res) => {
+  try {
+    const { emp_id } = req.params;
+    const targetUrl = `${PAYSLIP_API_URL}${req.originalUrl}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    
+    const response = await axios.get(targetUrl);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('❌ Earnings fetch error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to fetch earnings',
+      details: error.message
+    });
+  }
+});
 // ================= STATIC FILES =================
 app.use(express.static(path.join(__dirname, "/build")));
 
@@ -605,7 +880,7 @@ app.use((req, res) => {
 });
 
 // ================= START SERVER =================
-const PORT = process.env.BACKEND_PORT || 7013;
+const PORT = process.env.BACKEND_PORT || 7015;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });

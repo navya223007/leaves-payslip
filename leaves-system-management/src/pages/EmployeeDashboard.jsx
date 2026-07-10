@@ -4,7 +4,9 @@ import LeaveCard from "./LeaveCard";
 import { useAuth } from "../context/AuthContext.jsx";
 
 function EmployeeDashboard() {
-  const API = `http://${window.location.hostname}:7013`;
+  // const API = `http://localhost:7015`;
+  // const API = `http://localhost:7015`;
+  const API = ``;
   const { user } = useAuth();
   const [leaves, setLeaves] = useState([]);
 

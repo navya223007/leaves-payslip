@@ -6,9 +6,10 @@ function EmployeeDailyStatusReport() {
   const [statusList, setStatusList] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
-  const API = process.env.REACT_APP_API_URL || `http://${window.location.hostname}:7013`;
-
-  const [viewText, setViewText] = useState("");
+  // const API = process.env.REACT_APP_API_URL || `http://localhost:7015`;
+// const API = process.env.REACT_APP_API_URL || `http://localhost:7015`;
+ const API = process.env.REACT_APP_API_URL || ``;
+const [viewText, setViewText] = useState("");
   const [showViewModal, setShowViewModal] = useState(false);
 
   const [editId, setEditId] = useState(null);

@@ -5,9 +5,11 @@ import React, { useRef, useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import axios from "axios";
+// import axios from "axios";
+import api from "../api/axiosConfig";
 
-const API_BASE_URL = "http://localhost:7008/api";
+// const API_BASE_URL = "http://localhost:7014/api";
+const API_BASE_URL = "/api";
 
 function EmployeeViewPDF() {
   const location = useLocation();
@@ -95,7 +97,9 @@ function EmployeeViewPDF() {
   const fetchEarningsData = async (empId) => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/employees/${empId}/earnings`);
+      const response = await api.get(`${API_BASE_URL}/employees/${empId}/earnings`, {
+  withCredentials: true
+});
       setEarnings(response.data);
       if (response.data) {
         const epf = Number(response.data.employer_pf_contribution) || 0;
@@ -117,7 +121,9 @@ function EmployeeViewPDF() {
 
   const fetchEmployeeDetails = async (empId) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/employees/${empId}`);
+      const response = await api.get(`${API_BASE_URL}/employees/${empId}`, {
+  withCredentials: true
+});
       setEmployeeDetails(response.data);
     } catch { console.error("Error fetching employee details"); }
   };

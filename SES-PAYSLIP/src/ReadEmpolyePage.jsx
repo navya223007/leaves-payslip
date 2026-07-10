@@ -28,7 +28,7 @@ function ReadEmployeePage({ employee: propEmployee, goBack, onEdit, id }) {
         setLoading(true);
         try {
           const response = await axios.get(
-            `http://localhost:7008/api/employees/${id}`,
+            `/api/employees/${id}`,
           );
           setEmployee(response.data);
         } catch (error) {

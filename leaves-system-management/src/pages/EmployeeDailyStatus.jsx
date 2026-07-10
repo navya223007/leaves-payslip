@@ -3,8 +3,9 @@ import axios from "axios";
 import { useAuth } from "../context/AuthContext.jsx";
 
 function EmployeeDailyStatus() {
-  const API = `http://${window.location.hostname}:7013`;
-
+  // const API = `http://localhost:7015`;
+// const API = `http://localhost:7015`;
+const API = ``;
   const { user } = useAuth();
   const [employee, setEmployee] = useState({});
   const [projectName, setProjectName] = useState("");

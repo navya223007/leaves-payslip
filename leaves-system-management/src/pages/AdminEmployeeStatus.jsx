@@ -2,7 +2,8 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 
 function AdminEmployeeStatus() {
-  const API = `http://${window.location.hostname}:7013`;
+  // const API = `http://localhost:7015`;
+  const API = ``;
 
   const [statusList, setStatusList] = useState([]);
   const [employees, setEmployees] = useState([]);

@@ -12,15 +12,15 @@ const xlsx = require("xlsx");
 // const jwt = require("jsonwebtoken");
 
 const app = express();
-const PORT = process.env.PORT || 7008;
+const PORT = process.env.PORT || 7014;
 const host = "0.0.0.0";
 
 // Middleware;
 app.use(cors({
-  origin: [
-   '*'
-  ],
+  origin: '*',
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
@@ -43,8 +43,8 @@ app.use((err, req, res, next) => {
 const db = mysql.createPool({
   host: process.env.DB_HOST || "127.0.0.1",
   user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "123456789",
-  database: process.env.DB_NAME || "payslip",
+  password: process.env.DB_PASSWORD || "Sesgps@123",
+  database: process.env.DB_NAME || "testing_payslip",
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
@@ -809,7 +809,14 @@ app.get("/api/payslips/employee/:emp_id", (req, res) => {
     res.json(results);
   });
 });
-
+// Add this near the top of your payslip server routes
+app.get("/api/payslips/test", (req, res) => {
+  res.json({ 
+    message: "Payslip server test route works!",
+    timestamp: new Date().toISOString(),
+    headers: req.headers
+  });
+});
 // Get payslips by month/year
 app.get("/api/payslips/:year/:month", (req, res) => {
   const { year, month } = req.params;

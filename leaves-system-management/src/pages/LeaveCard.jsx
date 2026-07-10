@@ -4,8 +4,9 @@ import { FaEdit } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 
 function LeaveCard({ data = {}, onDelete, showActions = false }) {
-  const API = `http://${window.location.hostname}:7013`;
-
+  // const API = `http://localhost:7015`;
+//  const API = `http://localhost:7015`;
+const API = ``;
   const navigate = useNavigate();
   // Token handled by cookie
 

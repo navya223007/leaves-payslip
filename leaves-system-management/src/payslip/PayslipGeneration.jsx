@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../api/axiosConfig";
 import * as pdfjsLib from "pdfjs-dist";
 import { useLocation } from "react-router-dom";
 
@@ -86,7 +86,9 @@ function PayslipGeneration() {
     const grossAfterAttendance = perDaySalary * attendance.paidDays;
 
     // Calculate PF only if applicable
-    const pf = emp.pf_applicable ? (basic * 12) / 100 : 0;
+    const pf = emp.pf_applicable
+  ? Math.min(Math.round((basic * 12) / 100), 1800)
+  : 0;
 
     const professionalTax = emp.professional_tax
       ? Number(emp.professional_tax)
@@ -110,6 +112,7 @@ function PayslipGeneration() {
         name: emp.name,
         emp_id: emp.emp_id,
         designation: emp.designation,
+        PAN: emp.PAN,
         basicSalary: basic,
         allowances:
           emp.house_rent_allowence +
@@ -137,12 +140,18 @@ function PayslipGeneration() {
   // Fetch Employees from port 7008
   useEffect(() => {
     setLoading(true);
-    axios
-      .get("http://localhost:7008/api/employees")
+     api
+      .get("/api/employees")
       .then((res) => {
         setEmployees(res.data);
         setLoading(false);
       })
+    // axios
+    //   .get("http://localhost:7014/api/employees")
+    //   .then((res) => {
+    //     setEmployees(res.data);
+    //     setLoading(false);
+    //   })
       .catch((err) => {
         console.error("Error fetching employees:", err);
         setError(
@@ -321,7 +330,9 @@ function PayslipGeneration() {
     const grossAfterAttendance = perDaySalary * attendance.paidDays;
 
     // Calculate PF only if applicable
-    const pf = emp.pf_applicable ? (basic * 12) / 100 : 0;
+    const pf = emp.pf_applicable
+  ? Math.min(Math.round((basic * 12) / 100), 1800)
+  : 0;
 
     const netSalary =
       grossAfterAttendance -
@@ -336,7 +347,7 @@ function PayslipGeneration() {
         name: emp.name,
         emp_id: emp.emp_id,
         designation: emp.designation,
-        PAN: emp.pan,
+        PAN: emp.PAN,
         basicSalary: basic,
         allowances: transport + medical + internet + houseRent,
         totalSalary,
@@ -400,8 +411,8 @@ function PayslipGeneration() {
       if (isEditing && currentPayslipId) {
         // Update existing payslip
         console.log(`Updating payslip with ID: ${currentPayslipId}`);
-        response = await axios.put(
-          `http://localhost:7008/api/payslips/${currentPayslipId}`,
+        response = await api.put(
+          `/api/payslips/${currentPayslipId}`,
           payslipData,
           {
             headers: { "Content-Type": "application/json" },
@@ -411,8 +422,8 @@ function PayslipGeneration() {
         alert("Payslip updated successfully!");
       } else {
         // Create new payslip
-        response = await axios.post(
-          "http://localhost:7008/api/payslips/save",
+        response = await api.post(
+          "/api/payslips/save",
           payslipData,
           {
             headers: { "Content-Type": "application/json" },
@@ -801,7 +812,6 @@ function PayslipGeneration() {
                     </strong>
                     <span>
                       {generatedData.employee?.PAN ||
-                        generatedData.employee?.pan ||
                         "N/A"}
                     </span>
                   </div>
@@ -1057,3 +1067,4 @@ function numberToWords(num) {
   return convert(integerPart);
 }
 export default PayslipGeneration;
+

@@ -38,8 +38,8 @@ import { FaEdit, FaTrash, FaEye } from "react-icons/fa";
 import ReadEmployeePage from "./ReadEmpolyePage"; // adjust the path
 import Login from "./Login";
 
-// const API_BASE_URL = "http://192.168.29.239:7008/api";
-const API_BASE_URL = "http://localhost:7008/api";
+// const API_BASE_URL = "http://192.168.29.239:7014/api";
+const API_BASE_URL = "http://localhost:7014/api";
 
 // Main App component with routing
 function AppContent() {
@@ -271,7 +271,7 @@ function AppContent() {
   // Show message helper
   const showMessage = (type, text) => {
     setMessage({ type, text });
-    setTimeout(() => setMessage({ type: "", text: "" }), 7008);
+    setTimeout(() => setMessage({ type: "", text: "" }), 7014);
   };
 
   // Fetch all employees
@@ -321,7 +321,7 @@ function AppContent() {
         throw new Error("Username and password are required");
       }
 
-      const response = await fetch("http://localhost:7008/api/login", {
+      const response = await fetch("http://localhost:7014/api/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

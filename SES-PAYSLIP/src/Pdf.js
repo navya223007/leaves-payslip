@@ -4,7 +4,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:7008/api";
+const API_BASE_URL = "/api";
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -728,7 +728,7 @@ const API_BASE_URL = "http://localhost:7008/api";
                   lineHeight: "1.4",
                 }}
               >
-                Hyderabad - 700858
+                Hyderabad - 701458
               </div>
               <div
                 className="company-contact"

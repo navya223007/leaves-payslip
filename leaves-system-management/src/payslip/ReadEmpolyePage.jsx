@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Container, Card, Row, Col, Button } from "react-bootstrap";
-import axios from "axios";
+// import axios from "axios";
+import api from "../api/axiosConfig";
 
 // Simple field display component
 const Field = ({ label, value }) => (
@@ -27,8 +28,8 @@ function ReadEmployeePage({ employee: propEmployee, goBack, onEdit, id }) {
       const fetchEmployee = async () => {
         setLoading(true);
         try {
-          const response = await axios.get(
-            `http://localhost:7008/api/employees/${id}`,
+          const response = await api.get(
+            `/api/employees/${id}`,
           );
           setEmployee(response.data);
         } catch (error) {
