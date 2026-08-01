@@ -7,10 +7,18 @@ const jwt = require("jsonwebtoken");
 const path = require("path");
 const cookieParser = require("cookie-parser");
 const axios = require('axios');
+
+// navya
+const fs = require("fs");
+const multer = require("multer");
+const nodemailer = require("nodemailer");
+const cron = require("node-cron");
+const archiver = require("archiver");
+// navya
 console.log("========================================");
 console.log("🚀 STARTING SERVER VERSION 5.0 🚀");
 console.log("========================================");
-const PAYSLIP_API_URL = 'http://localhost:7014/api';
+const PAYSLIP_API_URL = 'http://localhost:7016/api';
 const app = express();
 app.get("/api/health", (req, res) => res.json({ version: "5.0", status: "ok" }));
 const SECRET_KEY = process.env.JWT_SECRET || "your_jwt_secret";
@@ -57,10 +65,31 @@ db.connect((err) => {
   console.log("✅ MySQL Connected");
 });
 
+// ================= MAIL CONFIG =================
+const transporter = nodemailer.createTransport({
+  host: process.env.MAIL_HOST,
+  port: Number(process.env.MAIL_PORT),
+  secure: false,
+  auth: {
+    user: process.env.MAIL_USER,
+    pass: process.env.MAIL_PASS,
+  },
+});
+
+transporter.verify((err, success) => {
+  if (err) {
+    console.error(" Mail configuration error:", err);
+  } else {
+    console.log("Mail server is ready");
+  }
+});
+
+// Your existing code continues
+
 // ================= TOKEN VERIFICATION =================
 const verifyToken = (req, res, next) => {
   try {
-    console.log("🍪 Cookies received:", req.cookies);
+    console.log(" Cookies received:", req.cookies);
     const authHeader = req.headers.authorization;
     let token = req.cookies?.token;
 
@@ -79,7 +108,7 @@ const verifyToken = (req, res, next) => {
           .json({ message: "Session expired. Please login again." });
       }
 
-      // 🔥 VERIFY AGAINST DATABASE (TOTAL TAKEN DATABASE)
+      //  VERIFY AGAINST DATABASE (TOTAL TAKEN DATABASE)
       db.query(
         "SELECT id, emp_id, name, role, department FROM users WHERE id = ?",
         [decoded.id],
@@ -100,80 +129,226 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-// ================= AUTH APIs =================
-app.post("/login", (req, res) => {
-  console.log("🔑 Login Attempt:", req.body);
-  const { emp_id, password } = req.body;
+// ================= ADMIN OTP MAIL =================
+const ADMIN_EMAILS = {
+  ADMIN001: "bodasunavya24@gmail.com",
+  // ADMIN002: "admin2@gmail.com",
+  // ADMIN003: "admin3@gmail.com",
+};
 
-  if (!emp_id || !password) {
-    return res
-      .status(400)
-      .json({ message: "Employee ID and Password are required" });
+// Create Verify OTP API
+const otpStore = new Map();
+app.post("/login", async (req, res) => {
+  try {
+    console.log("🔑 Login Attempt:", req.body);
+
+    const { emp_id, password } = req.body;
+
+    if (!emp_id || !password) {
+      return res.status(400).json({
+        message: "Employee ID and Password are required",
+      });
+    }
+
+    db.query(
+      "SELECT * FROM users WHERE LOWER(emp_id)=LOWER(?) OR LOWER(email)=LOWER(?)",
+      [emp_id.trim(), emp_id.trim()],
+      async (err, result) => {
+        if (err) {
+          console.log(err);
+          return res.status(500).json({
+            message: "Database error",
+          });
+        }
+
+        if (result.length === 0) {
+          return res.status(401).json({
+            message: "Invalid Employee ID or Password",
+          });
+        }
+
+        const user = result[0];
+
+        if (user.password.trim() !== password.trim()) {
+          return res.status(401).json({
+            message: "Invalid Employee ID or Password",
+          });
+        }
+
+        // ===========================
+        // ADMIN LOGIN (OTP REQUIRED)
+        // ===========================
+
+        if (String(user.role).trim().toLowerCase() === "admin") {
+          const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+          otpStore.set(user.emp_id, {
+            otp,
+            expires: Date.now() + 5 * 60 * 1000,
+          });
+
+          // Get email from object
+          const adminEmail = ADMIN_EMAILS[user.emp_id];
+
+          if (!adminEmail) {
+            return res.status(400).json({
+              message: "Admin email not configured",
+            });
+          }
+
+          try {
+            await transporter.sendMail({
+              from: process.env.MAIL_USER,
+              to: adminEmail,
+              subject: "Admin Login OTP",
+              html: `
+        <h2>Admin Login OTP</h2>
+
+        <p>Hello <b>${user.name}</b>,</p>
+
+        <h1>${otp}</h1>
+
+        <p>This OTP is valid for <b>5 minutes</b>.</p>
+
+        <p>Please do not share this OTP.</p>
+      `,
+            });
+            console.log("Returning OTP response");
+            return res.json({
+              otpRequired: true,
+              emp_id: user.emp_id,
+              message: "OTP sent successfully",
+            });
+          } catch (mailErr) {
+            console.log(mailErr);
+
+            return res.status(500).json({
+              message: "Failed to send OTP",
+            });
+          }
+        }
+
+        // ===========================
+        // EMPLOYEE LOGIN
+        // ===========================
+
+        const token = jwt.sign(
+          {
+            id: user.id,
+            role: String(user.role).trim().toLowerCase(),
+            emp_id: user.emp_id,
+          },
+          SECRET_KEY,
+          {
+            expiresIn: "1d",
+          },
+        );
+
+        res.cookie("token", token, {
+          httpOnly: true,
+          secure: false,
+          sameSite: "lax",
+          path: "/",
+          maxAge: 24 * 60 * 60 * 1000,
+        });
+
+        return res.json({
+          message: "Login successful",
+          user: {
+            id: user.id,
+            name: user.name,
+            emp_id: user.emp_id,
+            role: String(user.role).trim().toLowerCase(),
+            department: user.department,
+          },
+        });
+      },
+    );
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).json({
+      message: "Server Error",
+    });
+  }
+});
+
+app.post("/api/admin/verify-otp", (req, res) => {
+  const { emp_id, otp } = req.body;
+
+  const data = otpStore.get(emp_id);
+
+  if (!data) {
+    return res.status(400).json({
+      message: "OTP expired",
+    });
   }
 
-  db.query(
-    "SELECT * FROM users WHERE LOWER(emp_id) = LOWER(?) OR LOWER(email) = LOWER(?)",
-    [emp_id.trim(), emp_id.trim()],
-    (err, result) => {
-      if (err) {
-        console.log("❌ Login DB Error:", err);
-        return res.status(500).json({ message: "Database error" });
-      }
+  if (Date.now() > data.expires) {
+    otpStore.delete(emp_id);
 
-      if (result.length === 0) {
-        return res
-          .status(401)
-          .json({ message: "Invalid Employee ID or Password" });
+    return res.status(400).json({
+      message: "OTP expired",
+    });
+  }
+
+  if (data.otp !== otp) {
+    return res.status(400).json({
+      message: "Invalid OTP",
+    });
+  }
+
+  otpStore.delete(emp_id);
+
+  db.query(
+    "SELECT id,name,emp_id,role,department FROM users WHERE emp_id=?",
+    [emp_id],
+    (err, result) => {
+      if (err || result.length === 0) {
+        return res.status(400).json({
+          message: "User not found",
+        });
       }
 
       const user = result[0];
-      if (user.password.trim() !== password.trim()) {
-        return res
-          .status(401)
-          .json({ message: "Invalid Employee ID or Password" });
-      }
 
       const token = jwt.sign(
         {
           id: user.id,
-          role: String(user.role).trim().toLowerCase(),
+          role: user.role.toLowerCase(),
           emp_id: user.emp_id,
         },
         SECRET_KEY,
-        { expiresIn: "1d" },
+        {
+          expiresIn: "1d",
+        },
       );
 
       res.cookie("token", token, {
         httpOnly: true,
         secure: false,
         sameSite: "lax",
-        path: "/", // 👈 IMPORTANT ADD THIS
+        path: "/",
         maxAge: 24 * 60 * 60 * 1000,
       });
+
       res.json({
         message: "Login successful",
-        user: {
-          id: user.id,
-          name: user.name,
-          emp_id: user.emp_id,
-          role: String(user.role).trim().toLowerCase(),
-          department: user.department,
-        },
+        user,
       });
     },
   );
 });
-
 // 🔥 NEW AUTH VERIFICATION ROUTE
-// ✅ Add verifyToken middleware
+//   Add verifyToken middleware
 app.get("/api/auth/verify", verifyToken, (req, res) => {
-  console.log("✅ Token verified for user:", req.user.emp_id);
+  console.log("  Token verified for user:", req.user.emp_id);
   res.json({ user: req.user });
 });
 
-// ✅ Add verifyToken middleware here too
+//   Add verifyToken middleware here too
 app.get("/auth/verify", verifyToken, (req, res) => {
-  console.log("✅ Token verified for user (alias):", req.user.emp_id);
+  console.log("  Token verified for user (alias):", req.user.emp_id);
   res.json({ user: req.user });
 });
 
@@ -188,11 +363,18 @@ app.get("/profile", (req, res) => {
   res.json({ message: "Protected data", user: req.user });
 });
 
-// ================= EMPLOYEE APIs =================
-app.post("/create-employees", (req, res) => {
+const designationPrefixMap = {
+  TE: "SES-TE",
+  SE: "SES-SE",
+  HR: "SES-HR",
+  TESE: "SES-TST", // Match frontend value "TESE" to backend prefix
+  HE: "SES-HE", // Added support for Hardware Engineers
+};
+
+// --- CREATE EMPLOYEE ---
+app.post("/create-employees", verifyToken, (req, res) => {
   console.log("📝 Create Employee Body:", req.body);
   const userRole = (req.user.role || "").toString().trim().toLowerCase();
-  console.log("👤 User Role:", userRole);
 
   if (userRole !== "admin") {
     return res.status(403).json({
@@ -202,24 +384,18 @@ app.post("/create-employees", (req, res) => {
 
   const d = req.body;
 
-  // ================= VALIDATIONS =================
-
+  // VALIDATIONS
   if (!d.name || !d.email || !d.password) {
-    return res.status(400).json({
-      message: "Name, Email and Password are required",
-    });
+    return res
+      .status(400)
+      .json({ message: "Name, Email and Password are required" });
   }
 
-  // EMAIL VALIDATION
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
   if (!emailRegex.test(d.email)) {
-    return res.status(400).json({
-      message: "Invalid email format",
-    });
+    return res.status(400).json({ message: "Invalid email format" });
   }
 
-  // EMPLOYEE VALIDATION
   if (
     d.role === "employee" &&
     (!d.department || !d.subDepartment || !d.employeeType)
@@ -230,52 +406,35 @@ app.post("/create-employees", (req, res) => {
     });
   }
 
-  // ================= GET LAST EMPLOYEE ID =================
+  const prefix = designationPrefixMap[d.designation];
+  if (!prefix) {
+    return res.status(400).json({ message: "Invalid designation selected" });
+  }
 
-  const getLastIdSql = `
-    SELECT emp_id
-    FROM users
-    WHERE emp_id LIKE 'EMP%'
-    ORDER BY CAST(SUBSTRING(emp_id, 4) AS UNSIGNED) DESC
-    LIMIT 1
-  `;
+  // GENERATE NEW ID
+  const getLastIdSql = `SELECT emp_id FROM users WHERE emp_id LIKE '${prefix}%' ORDER BY emp_id DESC LIMIT 1`;
 
   db.query(getLastIdSql, (err, result) => {
-    if (err) {
-      return res.status(500).json(err);
-    }
+    if (err) return res.status(500).json(err);
 
-    let nextEmpId = "EMP001";
-
+    let nextEmpId = `${prefix}001`;
     if (result.length > 0) {
       const lastEmpId = result[0].emp_id;
-
-      const number = parseInt(lastEmpId.replace("EMP", "")) + 1;
-
-      nextEmpId = `EMP${String(number).padStart(3, "0")}`;
+      const lastNumber = parseInt(lastEmpId.replace(prefix, ""));
+      const nextNumber = lastNumber + 1;
+      nextEmpId = `${prefix}${String(nextNumber).padStart(3, "0")}`;
     }
 
-    // ================= INSERT USER =================
-
     const insertSql = `
-      INSERT INTO users
-      (
-        emp_id,
-        name,
-        email,
-        password,
-        role,
-        department,
-        employeeType,
-        subDepartment
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users (emp_id, designation, name, email, password, role, department, employeeType, subDepartment)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     db.query(
       insertSql,
       [
         nextEmpId,
+        d.designation,
         d.name.trim(),
         d.email.trim(),
         d.password,
@@ -287,14 +446,10 @@ app.post("/create-employees", (req, res) => {
       (err) => {
         if (err) {
           if (err.code === "ER_DUP_ENTRY") {
-            return res.status(400).json({
-              message: "Email already exists",
-            });
+            return res.status(400).json({ message: "Email already exists" });
           }
-
           return res.status(500).json(err);
         }
-
         res.status(201).json({
           message: "Employee created successfully",
           emp_id: nextEmpId,
@@ -304,17 +459,93 @@ app.post("/create-employees", (req, res) => {
   });
 });
 
-app.get("/employees-reports", (req, res) => {
+// --- UPDATE EMPLOYEE ---
+app.put("/employees/:id", verifyToken, (req, res) => {
+  const d = req.body;
+  const employeeId = req.params.id;
+
+  // First fetch existing employee record to compare designations
   db.query(
-    "SELECT id, emp_id, name, email, role, department, subDepartment, employeeType FROM users",
-    (err, result) => {
+    "SELECT designation, emp_id FROM users WHERE id = ?",
+    [employeeId],
+    (err, currentRecord) => {
       if (err) return res.status(500).json(err);
-      res.json(result);
+      if (currentRecord.length === 0)
+        return res.status(404).json({ message: "Employee not found" });
+
+      const existingEmployee = currentRecord[0];
+      const prefix = designationPrefixMap[d.designation];
+
+      if (!prefix) {
+        return res
+          .status(400)
+          .json({ message: "Invalid designation selected" });
+      }
+
+      // Execution helper to carry out the update statement execution
+      const executeUpdate = (finalEmpId) => {
+        const sql = `
+        UPDATE users 
+        SET emp_id=?, designation=?, name=?, email=?, role=?, department=?, subDepartment=?, employeeType=?
+        WHERE id=?
+      `;
+        db.query(
+          sql,
+          [
+            finalEmpId,
+            d.designation,
+            d.name,
+            d.email,
+            d.role,
+            d.department,
+            d.subDepartment,
+            d.employeeType,
+            employeeId,
+          ],
+          (err) => {
+            if (err) return res.status(500).json(err);
+            res.json({
+              message: "Employee updated successfully",
+              emp_id: finalEmpId,
+            });
+          },
+        );
+      };
+
+      // ONLY generate a new ID if the designation has explicitly changed
+      if (existingEmployee.designation !== d.designation) {
+        const getLastIdSql = `SELECT emp_id FROM users WHERE emp_id LIKE ? ORDER BY emp_id DESC LIMIT 1`;
+        db.query(getLastIdSql, [`${prefix}%`], (err, result) => {
+          if (err) return res.status(500).json(err);
+
+          let nextEmpId = `${prefix}001`;
+          if (result.length > 0) {
+            const lastEmpId = result[0].emp_id;
+            const lastNumber = parseInt(lastEmpId.replace(prefix, ""));
+            const nextNumber = lastNumber + 1;
+            nextEmpId = `${prefix}${String(nextNumber).padStart(3, "0")}`;
+          }
+          executeUpdate(nextEmpId);
+        });
+      } else {
+        // Keep old employee configuration id if designation is unmodified
+        executeUpdate(existingEmployee.emp_id);
+      }
     },
   );
 });
 
-app.get("/employees/:id", (req, res) => {
+// --- GET ALL REPORTS ---
+app.get("/employees-reports", verifyToken, (req, res) => {
+  const sql = `SELECT id, emp_id, designation, name, email, password, role, department, subDepartment, employeeType FROM users ORDER BY emp_id ASC`;
+  db.query(sql, (err, result) => {
+    if (err) return res.status(500).json(err);
+    res.json(result);
+  });
+});
+
+// --- GET SINGLE EMPLOYEE ---
+app.get("/employees/:id", verifyToken, (req, res) => {
   db.query("SELECT * FROM users WHERE id=?", [req.params.id], (err, result) => {
     if (err) return res.status(500).json(err);
     if (result.length === 0)
@@ -323,47 +554,151 @@ app.get("/employees/:id", (req, res) => {
   });
 });
 
-app.put("/employees/:id", (req, res) => {
-  const d = req.body;
-  const sql = `
-    UPDATE users 
-    SET emp_id=?, name=?, email=?, role=?, department=?, subDepartment=?, employeeType=? 
-    WHERE id=?
-  `;
-
-  db.query(
-    sql,
-    [
-      d.emp_id,
-      d.name,
-      d.email,
-      d.role,
-      d.department,
-      d.subDepartment,
-      d.employeeType,
-      req.params.id,
-    ],
-    (err) => {
-      if (err) return res.status(500).json(err);
-      res.json({ message: "Employee updated successfully" });
-    },
-  );
-});
-
-app.delete("/employees/:id", (req, res) => {
+// --- DELETE EMPLOYEE ---
+app.delete("/employees/:id", verifyToken, (req, res) => {
   db.query("DELETE FROM users WHERE id=?", [req.params.id], (err) => {
     if (err) return res.status(500).json(err);
     res.json({ message: "Employee deleted successfully" });
   });
 });
 
+// ================= CHANGE PASSWORD =================
+
+app.put("/api/change-password", verifyToken, (req, res) => {
+  const { currentPassword, newPassword, confirmPassword } = req.body;
+
+  // Validation
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    return res.status(400).json({
+      message: "All fields are required",
+    });
+  }
+
+  if (newPassword !== confirmPassword) {
+    return res.status(400).json({
+      message: "New Password and Confirm Password do not match",
+    });
+  }
+
+  // Get logged-in user
+  db.query(
+    "SELECT id, password FROM users WHERE id = ?",
+    [req.user.id],
+    (err, result) => {
+      if (err) {
+        return res.status(500).json({
+          message: "Database error",
+        });
+      }
+
+      if (result.length === 0) {
+        return res.status(404).json({
+          message: "User not found",
+        });
+      }
+
+      const user = result[0];
+
+      // Verify current password
+      if (user.password.trim() !== currentPassword.trim()) {
+        return res.status(400).json({
+          message: "Current password is incorrect",
+        });
+      }
+
+      // Update password
+      db.query(
+        "UPDATE users SET password = ? WHERE id = ?",
+        [newPassword.trim(), req.user.id],
+        (updateErr) => {
+          if (updateErr) {
+            return res.status(500).json({
+              message: "Failed to update password",
+            });
+          }
+
+          res.json({
+            message: "Password changed successfully",
+          });
+        },
+      );
+    },
+  );
+});
 // ================= LEAVE APIs =================
-app.post("/api/leaves/apply", (req, res) => {
+app.post("/api/leaves/apply", verifyToken, (req, res) => {
   const d = req.body;
+
+  const now = new Date();
+
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+
+  // Current time in minutes
+  const currentTime = currentHour * 60 + currentMinute;
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const leaveDate = d.date;
+
+  // ======================================
+  // TODAY LEAVE VALIDATION
+  // ======================================
+
+  if (leaveDate === today) {
+
+    // Full Day Leave
+    if (d.leave_type === "full") {
+
+      if (currentTime >= (10 * 60)) {
+        return res.status(400).json({
+          message:
+            "Today's Full Day Leave can only be applied before 10:00 AM.",
+        });
+      }
+    }
+
+    // Half Day Leave
+    if (d.leave_type === "half") {
+
+      // Morning Session
+      if (
+        d.session === "morning" &&
+        currentTime >= (10 * 60)
+      ) {
+        return res.status(400).json({
+          message:
+            "Today's Morning Half Day Leave can only be applied before 10:00 AM.",
+        });
+      }
+
+      // Afternoon Session
+      // Always allowed
+    }
+  }
+
+  // ======================================
+  // EMERGENCY LEAVE
+  // ======================================
+
+  const isEmergency = leaveDate === today ? 1 : 0;
+
   const sql = `
     INSERT INTO leaves
-    (emp_id, name, department, leave_type, sub_type, date, selected_dates, session, reason_type, reason_text)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (
+      emp_id,
+      name,
+      department,
+      leave_type,
+      sub_type,
+      date,
+      selected_dates,
+      session,
+      reason_type,
+      reason_text,
+      is_emergency
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   db.query(
@@ -379,15 +714,92 @@ app.post("/api/leaves/apply", (req, res) => {
       d.session,
       d.reason_type,
       d.reason_text,
+      isEmergency,
     ],
-    (err, result) => {
-      if (err) return res.status(500).json(err);
-      res.json({ message: "Leave applied successfully", id: result.insertId });
-    },
+    async (err, result) => {
+      if (err) {
+        console.log(err);
+        return res.status(500).json({
+          message: "Database Error",
+        });
+      }
+
+      // ======================================
+      // SEND EMERGENCY MAIL
+      // ======================================
+
+      if (isEmergency) {
+        try {
+          await transporter.sendMail({
+            from: process.env.MAIL_USER,
+            to: process.env.OFFICE_MAIL,
+            subject: `🚨 Emergency Leave Alert - ${d.name}`,
+            html: `
+              <h2>Emergency Leave Alert</h2>
+
+              <table border="1" cellpadding="8" cellspacing="0">
+
+                <tr>
+                  <td><b>Employee ID</b></td>
+                  <td>${d.emp_id}</td>
+                </tr>
+
+                <tr>
+                  <td><b>Name</b></td>
+                  <td>${d.name}</td>
+                </tr>
+
+                <tr>
+                  <td><b>Department</b></td>
+                  <td>${d.department}</td>
+                </tr>
+
+                <tr>
+                  <td><b>Leave Type</b></td>
+                  <td>${d.leave_type}</td>
+                </tr>
+
+                <tr>
+                  <td><b>Session</b></td>
+                  <td>${d.session || "-"}</td>
+                </tr>
+
+                <tr>
+                  <td><b>Leave Date</b></td>
+                  <td>${d.date}</td>
+                </tr>
+
+                <tr>
+                  <td><b>Reason</b></td>
+                  <td>${d.reason_text || d.reason_type}</td>
+                </tr>
+
+              </table>
+
+              <br>
+
+              <h3>
+                Employee <b>${d.name}</b> has applied for an
+                <span style="color:red;">EMERGENCY LEAVE</span>.
+              </h3>
+            `,
+          });
+
+          console.log("Emergency Leave Mail Sent");
+        } catch (mailErr) {
+          console.log("Mail Error:", mailErr);
+        }
+      }
+
+      return res.json({
+        message: "Leave applied successfully",
+        id: result.insertId,
+      });
+    }
   );
 });
 
-app.put("/api/leaves/update/:id", (req, res) => {
+app.put("/api/leaves/update/:id", verifyToken, (req, res) => {
   const d = req.body;
   const sql = `
     UPDATE leaves 
@@ -418,7 +830,7 @@ app.put("/api/leaves/update/:id", (req, res) => {
   );
 });
 
-app.get("/api/leaves/employee/:emp_id", (req, res) => {
+app.get("/api/leaves/employee/:emp_id", verifyToken, (req, res) => {
   db.query(
     "SELECT * FROM leaves WHERE emp_id=? AND (employee_checked IS NULL OR employee_checked=0) ORDER BY id DESC",
     [req.params.emp_id],
@@ -482,6 +894,7 @@ app.get("/api/leaves/report", verifyToken, (req, res) => {
     params.push(emp_id);
   }
 
+  // Uses created_at timestamp to accurately capture standard calendar months
   if (month && month !== "all") {
     sql += " AND MONTH(created_at) = ?";
     params.push(month);
@@ -496,24 +909,234 @@ app.get("/api/leaves/report", verifyToken, (req, res) => {
 
   db.query(sql, params, (err, result) => {
     if (err) return res.status(500).json(err);
+
     const data = result.map((r) => ({
       ...r,
+      // Normalize empty strings to explicit nulls so your frontend filters act reliably
+      reason_text:
+        r.reason_type === "other" && r.reason_text
+          ? r.reason_text.trim()
+          : null,
+      date:
+        r.leave_type === "half" ||
+        (r.leave_type === "full" && r.sub_type === "single")
+          ? r.date
+          : null,
+
       selected_dates: (() => {
-        try {
-          return typeof r.selected_dates === "string"
-            ? JSON.parse(r.selected_dates)
-            : r.selected_dates;
-        } catch {
-          return [];
+        if (r.leave_type === "full" && r.sub_type === "multi") {
+          try {
+            return typeof r.selected_dates === "string"
+              ? JSON.parse(r.selected_dates)
+              : r.selected_dates || [];
+          } catch {
+            return [];
+          }
         }
+        return []; // Clean fallback for non-multiple rows
       })(),
     }));
+
     res.json(data);
   });
 });
 
-// ================= DASHBOARD APIs =================
-app.get("/api/dashboard/admin-counts", (req, res) => {
+// 10:00 AM - Tomorrow Morning Reminder
+cron.schedule("0 10 * * *", async () => {
+  console.log("Running Tomorrow Morning Reminder");
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const leaveDate = tomorrow.toISOString().split("T")[0];
+
+  db.query(
+    `SELECT * FROM leaves
+     WHERE date=?
+     AND is_emergency=0
+     AND reminder_morning_sent=0`,
+    [leaveDate],
+    async (err, rows) => {
+      if (err) return console.log(err);
+
+      for (const leave of rows) {
+        try {
+          await transporter.sendMail({
+            from: process.env.MAIL_USER,
+            to: process.env.OFFICE_MAIL,
+            subject: `🌞 Morning Reminder - ${leave.name} Leave Tomorrow`,
+            html: `
+              <h2>Morning Reminder</h2>
+              <p><b>${leave.name}</b> (${leave.emp_id}) will be on leave tomorrow.</p>
+
+              <table border="1" cellpadding="8">
+                <tr><td>Name</td><td>${leave.name}</td></tr>
+                <tr><td>Department</td><td>${leave.department}</td></tr>
+                <tr><td>Leave Date</td><td>${leave.date}</td></tr>
+                <tr><td>Leave Type</td><td>${leave.leave_type}</td></tr>
+                <tr><td>Session</td><td>${leave.session || "-"}</td></tr>
+                <tr><td>Reason</td><td>${leave.reason_text || leave.reason_type}</td></tr>
+              </table>
+            `,
+          });
+
+          db.query(
+            "UPDATE leaves SET reminder_morning_sent=1 WHERE id=?",
+            [leave.id]
+          );
+        } catch (e) {
+          console.log(e);
+        }
+      }
+    }
+  );
+});
+//  2:00 PM - Tomorrow Afternoon Reminder
+cron.schedule("0 14 * * *", async () => {
+  console.log("Running Tomorrow Afternoon Reminder");
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const leaveDate = tomorrow.toISOString().split("T")[0];
+
+  db.query(
+    `SELECT * FROM leaves
+     WHERE date=?
+     AND is_emergency=0
+     AND reminder_afternoon_sent=0`,
+    [leaveDate],
+    async (err, rows) => {
+      if (err) return console.log(err);
+
+      for (const leave of rows) {
+        try {
+          await transporter.sendMail({
+            from: process.env.MAIL_USER,
+            to: process.env.OFFICE_MAIL,
+            subject: `🌤 Afternoon Reminder - ${leave.name} Leave Tomorrow`,
+            html: `
+              <h2>Afternoon Reminder</h2>
+
+              <p><b>${leave.name}</b> will be on leave tomorrow.</p>
+
+              <table border="1" cellpadding="8">
+                <tr><td>Name</td><td>${leave.name}</td></tr>
+                <tr><td>Department</td><td>${leave.department}</td></tr>
+                <tr><td>Leave Date</td><td>${leave.date}</td></tr>
+                <tr><td>Reason</td><td>${leave.reason_text || leave.reason_type}</td></tr>
+              </table>
+            `,
+          });
+
+          db.query(
+            "UPDATE leaves SET reminder_afternoon_sent=1 WHERE id=?",
+            [leave.id]
+          );
+        } catch (e) {
+          console.log(e);
+        }
+      }
+    }
+  );
+});
+
+// 6:00 PM - Tomorrow Evening Reminder
+cron.schedule("0 18 * * *", async () => {
+  console.log("Running Tomorrow Evening Reminder");
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const leaveDate = tomorrow.toISOString().split("T")[0];
+
+  db.query(
+    `SELECT * FROM leaves
+     WHERE date=?
+     AND is_emergency=0
+     AND reminder_night_sent=0`,
+    [leaveDate],
+    async (err, rows) => {
+      if (err) return console.log(err);
+
+      for (const leave of rows) {
+        try {
+          await transporter.sendMail({
+            from: process.env.MAIL_USER,
+            to: process.env.OFFICE_MAIL,
+            subject: `🌙 Evening Reminder - ${leave.name} Leave Tomorrow`,
+            html: `
+              <h2>Evening Reminder</h2>
+
+              <p><b>${leave.name}</b> is on leave tomorrow.</p>
+
+              <table border="1" cellpadding="8">
+                <tr><td>Name</td><td>${leave.name}</td></tr>
+                <tr><td>Department</td><td>${leave.department}</td></tr>
+                <tr><td>Leave Date</td><td>${leave.date}</td></tr>
+                <tr><td>Reason</td><td>${leave.reason_text || leave.reason_type}</td></tr>
+              </table>
+            `,
+          });
+
+          db.query(
+            "UPDATE leaves SET reminder_night_sent=1 WHERE id=?",
+            [leave.id]
+          );
+        } catch (e) {
+          console.log(e);
+        }
+      }
+    }
+  );
+});
+// 9:00 AM - Leave Day Reminder
+cron.schedule("0 9 * * *", async () => {
+  console.log("Running Leave Day Reminder");
+
+  const today = new Date().toISOString().split("T")[0];
+
+  db.query(
+    `SELECT * FROM leaves
+     WHERE date=?
+     AND is_emergency=0
+     AND reminder_leaveday_sent=0`,
+    [today],
+    async (err, rows) => {
+      if (err) return console.log(err);
+
+      for (const leave of rows) {
+        try {
+          await transporter.sendMail({
+            from: process.env.MAIL_USER,
+            to: process.env.OFFICE_MAIL,
+            subject: `📢 Employee On Leave Today - ${leave.name}`,
+            html: `
+              <h2>Today's Leave Reminder</h2>
+
+              <p><b>${leave.name}</b> is on leave today.</p>
+
+              <table border="1" cellpadding="8">
+                <tr><td>Name</td><td>${leave.name}</td></tr>
+                <tr><td>Department</td><td>${leave.department}</td></tr>
+                <tr><td>Leave Type</td><td>${leave.leave_type}</td></tr>
+                <tr><td>Session</td><td>${leave.session || "-"}</td></tr>
+                <tr><td>Reason</td><td>${leave.reason_text || leave.reason_type}</td></tr>
+              </table>
+            `,
+          });
+
+          db.query(
+            "UPDATE leaves SET reminder_leaveday_sent=1 WHERE id=?",
+            [leave.id]
+          );
+        } catch (e) {
+          console.log(e);
+        }
+      }
+    }
+  );
+});
+// Approve API
+
+app.get("/api/dashboard/admin-counts", verifyToken, (req, res) => {
   db.query(
     "SELECT SUM(status='pending') AS pending, SUM(status='approved') AS approved, SUM(status='rejected') AS rejected FROM leaves",
     (err, result) => {
@@ -523,79 +1146,1043 @@ app.get("/api/dashboard/admin-counts", (req, res) => {
   );
 });
 
-// ================= DAILY STATUS APIs =================
-app.post("/api/daily-status", (req, res) => {
+
+app.post("/api/daily-status", verifyToken, (req, res) => {
   const d = req.body;
+
+  // ✅ Allow only today's date
+  const today = new Date().toISOString().split("T")[0];
+
+  if (d.status_date !== today) {
+    return res.status(400).json({
+      message: "Daily Status can be submitted only for today's date.",
+    });
+  }
+
+  const sql = `
+    INSERT INTO daily_status
+    (emp_id, project_name, subtask, assigned_by, status_date, status_month, status_year)
+    VALUES (?, ?, ?, ?, ?, MONTH(?), YEAR(?))
+  `;
+
   db.query(
-    "INSERT INTO daily_status (emp_id, project_name, subtask, assigned_by, status_date, status_month, status_year) VALUES (?, ?, ?, ?, CURDATE(), MONTH(CURDATE()), YEAR(CURDATE()))",
-    [d.emp_id, d.project_name, d.subtask, d.assigned_by],
+    sql,
+    [
+      d.emp_id,
+      d.project_name,
+      d.subtask,
+      d.assigned_by,
+      d.status_date,
+      d.status_date,
+      d.status_date,
+    ],
     (err) => {
-      if (err) return res.status(500).json(err);
-      res.json({ message: "Daily status submitted" });
-    },
+      if (err) {
+        if (err.code === "ER_DUP_ENTRY") {
+          return res.status(400).json({
+            message: "Already submitted for today",
+          });
+        }
+
+        return res.status(500).json(err);
+      }
+
+      res.json({
+        message: "Daily status submitted",
+      });
+    }
   );
 });
 
-app.get("/api/daily-status/report", (req, res) => {
+app.get("/api/daily-status/report", verifyToken, (req, res) => {
   const { emp_id, month, status } = req.query;
-  let sql =
-    "SELECT d.*, u.name, u.department FROM daily_status d LEFT JOIN users u ON d.emp_id=u.emp_id WHERE 1=1";
+
+  let sql = `
+    SELECT
+      d.id,
+      d.emp_id,
+      d.project_name,
+      d.assigned_by,
+      d.subtask,
+      d.status_date,
+      d.status_month,
+      d.status,
+      d.admin_comment,
+      u.name,
+      u.department
+    FROM daily_status d
+    LEFT JOIN users u ON d.emp_id = u.emp_id
+    WHERE 1=1
+  `;
+
   const params = [];
 
   if (emp_id && emp_id !== "all") {
-    sql += " AND d.emp_id=?";
+    sql += " AND d.emp_id = ?";
     params.push(emp_id);
   }
 
   if (month && month !== "all") {
-    sql += " AND d.status_month=?";
+    sql += " AND d.status_month = ?";
     params.push(Number(month));
   }
 
   if (status && status !== "all") {
-    sql += " AND d.status=?";
+    sql += " AND d.status = ?";
     params.push(status);
   }
 
   sql += " ORDER BY d.status_date DESC";
 
   db.query(sql, params, (err, result) => {
-    if (err) return res.status(500).json(err);
+    if (err) {
+      console.log(err);
+      return res.status(500).json({
+        message: "Database error",
+      });
+    }
+
     res.json(result);
   });
 });
+// UPDATE DAILY STATUS
+app.put("/api/daily-status/update/:id", verifyToken, (req, res) => {
+  const { project_name, subtask, assigned_by, status_date } = req.body;
 
-app.put("/api/daily-status/update/:id", (req, res) => {
-  const { project_name, subtask, assigned_by } = req.body;
-  const sql =
-    "UPDATE daily_status SET project_name=?, subtask=?, assigned_by=? WHERE id=?";
-  db.query(sql, [project_name, subtask, assigned_by, req.params.id], (err) => {
-    if (err) return res.status(500).json(err);
-    res.json({ message: "Status updated successfully" });
+  // ✅ Allow only today's date
+  const today = new Date().toISOString().split("T")[0];
+
+  if (status_date !== today) {
+    return res.status(400).json({
+      message: "Daily Status can be updated only for today's date.",
+    });
+  }
+
+  const sql = `
+    UPDATE daily_status
+    SET project_name = ?,
+        subtask = ?,
+        assigned_by = ?,
+        status_date = ?,
+        status_month = MONTH(?),
+        status_year = YEAR(?)
+    WHERE id = ?
+  `;
+
+  db.query(
+    sql,
+    [
+      project_name,
+      subtask,
+      assigned_by,
+      status_date,
+      status_date,
+      status_date,
+      req.params.id,
+    ],
+    (err, result) => {
+      if (err) {
+        if (err.code === "ER_DUP_ENTRY") {
+          return res.status(400).json({
+            message: "Already a record exists for this date. Cannot update.",
+          });
+        }
+
+        return res.status(500).json({
+          message: "Update failed",
+        });
+      }
+
+      return res.json({
+        message: "Updated successfully",
+      });
+    }
+  );
+});
+
+app.put("/api/daily-status/approve/:id", verifyToken, (req, res) => {
+  console.log("BODY:", req.body);
+  console.log("ID:", req.params.id);
+
+  const { admin_comment } = req.body;
+
+  db.query(
+    "UPDATE daily_status SET status='approved', admin_comment=? WHERE id=?",
+    [admin_comment, req.params.id],
+    (err, result) => {
+      if (err) {
+        console.log("DB ERROR:", err);
+        return res.status(500).json(err);
+      }
+
+      console.log("RESULT:", result);
+
+      res.json({
+        message: "Approved Successfully",
+      });
+    },
+  );
+});
+app.put("/api/daily-status/reject/:id", verifyToken, (req, res) => {
+  const { admin_comment } = req.body;
+
+  db.query(
+    "UPDATE daily_status SET status='rejected', admin_comment=? WHERE id=?",
+    [admin_comment, req.params.id],
+    (err) => {
+      if (err) return res.status(500).json(err);
+
+      res.json({
+        message: "Rejected Successfully",
+      });
+    },
+  );
+});
+
+//navya 
+// ======================================================
+// CREATE UPLOAD FOLDERS
+// ======================================================
+
+const folders = ["uploads", "uploads/aadhaar", "uploads/pan", "uploads/bank"];
+
+for (const folder of folders) {
+  fs.mkdirSync(folder, { recursive: true });
+}
+
+// ======================================================
+// MULTER STORAGE
+// ======================================================
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    if (file.fieldname === "aadhaar_file") {
+      cb(null, "uploads/aadhaar");
+    } else if (file.fieldname === "pan_file") {
+      cb(null, "uploads/pan");
+    } else {
+      cb(null, "uploads/bank");
+    }
+  },
+
+  filename: (req, file, cb) => {
+    const safeFileName =
+      Date.now() + "-" + file.originalname.replace(/\s/g, "_");
+
+    cb(null, safeFileName);
+  },
+});
+
+// ======================================================
+// FILE FILTER
+// ======================================================
+
+const upload = multer({
+  storage,
+
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      // PDF
+      "application/pdf",
+
+      // Images
+      "image/png",
+      "image/jpg",
+      "image/jpeg",
+
+      // ZIP
+      "application/zip",
+      "application/x-zip-compressed",
+    ];
+
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only PDF, Images, and ZIP files allowed"), false);
+    }
+  },
+
+  // 20MB LIMIT
+  limits: {
+    fileSize: 20 * 1024 * 1024,
+  },
+});
+
+// ======================================================
+// STATIC FILES
+// ======================================================
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// ======================================================
+// DATE FORMAT FUNCTIONS
+// ======================================================
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return null;
+
+  // if already YYYY-MM-DD
+  if (dateStr.includes("-")) {
+    return dateStr;
+  }
+
+  // convert DD/MM/YYYY -> YYYY-MM-DD
+  const [dd, mm, yyyy] = dateStr.split("/");
+
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const toMySQLDate = (date) => {
+  if (!date) return null;
+
+  return date.toISOString().split("T")[0];
+};
+
+// ======================================================
+// AUTO FETCH EMPLOYEE DETAILS
+// ======================================================
+
+app.get("/api/employee-basic/:emp_id", (req, res) => {
+  const sql = `
+    SELECT
+      emp_id,
+      name,
+      department,
+      subDepartment,
+      employeeType
+    FROM users
+    WHERE emp_id=?
+  `;
+
+  db.query(sql, [req.params.emp_id], (err, result) => {
+    if (err) {
+      console.log(err);
+
+      return res.status(500).json({
+        message: "Database Error",
+      });
+    }
+
+    if (result.length === 0) {
+      return res.status(404).json({
+        message: "Employee not found",
+      });
+    }
+
+    res.json(result[0]);
+  });
+});
+// ======================================================
+// SAVE EMPLOYEE PERSONAL DETAILS
+// ======================================================
+app.post(
+  "/api/personal-details",
+  upload.fields([
+    { name: "aadhaar_file", maxCount: 1 },
+    { name: "pan_file", maxCount: 1 },
+    { name: "bank_file", maxCount: 1 },
+  ]),
+  (req, res) => {
+    try {
+      const d = req.body;
+
+      console.log("BODY DATA:", d);
+      console.log("FILES:", req.files);
+
+      // FORMAT DATES
+      const formattedDOB = formatDate(d.date_of_birth);
+      const formattedDOJ = formatDate(d.date_of_joining);
+
+      if (!formattedDOJ) {
+        return res.status(400).json({
+          message: "Invalid Date of Joining",
+        });
+      }
+
+      const joiningDate = new Date(formattedDOJ);
+      const today = new Date();
+
+      if (isNaN(joiningDate.getTime())) {
+        return res.status(400).json({
+          message: "Invalid Joining Date format after conversion",
+        });
+      }
+
+      // APPRAISAL LOGIC
+      let lastAppraisal = new Date(joiningDate);
+
+      while (lastAppraisal <= today) {
+        lastAppraisal.setFullYear(lastAppraisal.getFullYear() + 1);
+      }
+
+      const nextAppraisal = new Date(lastAppraisal);
+      lastAppraisal.setFullYear(lastAppraisal.getFullYear() - 1);
+
+      // FINAL MYSQL SAFE DATES
+      const lastAppraisalDate = toMySQLDate(lastAppraisal);
+      const nextAppraisalDate = toMySQLDate(nextAppraisal);
+
+      const sql = `
+        INSERT INTO employee_personal_details (
+          emp_id,
+          emp_name,
+          aadhaar_number,
+          pan_number,
+          date_of_birth,
+          date_of_joining,
+          bank_account_number,
+          ifsc_code,
+          aadhaar_file,
+          pan_file,
+          bank_file,
+          last_appraisal_date,
+          next_appraisal_date
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+
+      db.query(
+        sql,
+        [
+          d.emp_id,
+          d.emp_name,
+          d.aadhaar_number || null,
+          d.pan_number || null,
+          formattedDOB,
+          formattedDOJ,
+          d.bank_account_number || null,
+          d.ifsc_code || null,
+          req.files?.aadhaar_file?.[0]?.filename || null,
+          req.files?.pan_file?.[0]?.filename || null,
+          req.files?.bank_file?.[0]?.filename || null,
+          lastAppraisalDate,
+          nextAppraisalDate,
+        ],
+        (err, result) => {
+          if (err) {
+            console.log("FULL DB ERROR:", err.sqlMessage);
+            console.log("SQL STATE:", err.sqlState);
+            console.log("CODE:", err.code);
+
+            return res.status(500).json({
+              message: err.sqlMessage,
+              code: err.code,
+            });
+          }
+
+          return res.status(201).json({
+            message: "Personal Details Saved Successfully",
+            id: result.insertId,
+          });
+        },
+      );
+    } catch (error) {
+      console.log("SERVER ERROR:", error);
+
+      return res.status(500).json({
+        message: "Server Error",
+        error: error.message,
+      });
+    }
+  },
+);
+
+// ======================================================
+// GET ALL EMPLOYEE PERSONAL DETAILS
+// ======================================================
+
+app.get(
+  "/api/personal-details",
+
+  (req, res) => {
+    const sql = `
+
+        SELECT *
+
+        FROM employee_personal_details
+
+        ORDER BY created_at DESC
+        `;
+
+    db.query(sql, (err, result) => {
+      if (err) {
+        return res.status(500).json(err);
+      }
+
+      res.json(result);
+    });
+  },
+);
+
+// ======================================================
+// GET SINGLE EMPLOYEE DETAILS
+// ======================================================
+
+app.get(
+  "/api/personal-details/:emp_id",
+
+  (req, res) => {
+    const sql = `
+
+        SELECT *
+
+        FROM employee_personal_details
+
+        WHERE emp_id=?
+        `;
+
+    db.query(
+      sql,
+
+      [req.params.emp_id],
+
+      (err, result) => {
+        if (err) {
+          return res.status(500).json(err);
+        }
+
+        if (result.length === 0) {
+          return res.status(404).json({
+            message: "Employee not found",
+          });
+        }
+
+        res.json(result[0]);
+      },
+    );
+  },
+);
+
+// ======================================================
+// UPDATE PERSONAL DETAILS
+// ======================================================
+app.put(
+  "/api/personal-details/:emp_id",
+  upload.fields([
+    { name: "aadhaar_file", maxCount: 1 },
+    { name: "pan_file", maxCount: 1 },
+    { name: "bank_file", maxCount: 1 },
+  ]),
+  (req, res) => {
+    const d = req.body;
+
+    const getOldSql = "SELECT * FROM employee_personal_details WHERE emp_id=?";
+
+    db.query(getOldSql, [req.params.emp_id], (err, result) => {
+      if (err) return res.status(500).json(err);
+
+      if (result.length === 0) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
+      const old = result[0];
+
+      //   SAFE FILE HANDLING
+      const aadhaarFile =
+        req.files?.aadhaar_file?.[0]?.filename || old?.aadhaar_file || null;
+
+      const panFile =
+        req.files?.pan_file?.[0]?.filename || old?.pan_file || null;
+
+      const bankFile =
+        req.files?.bank_file?.[0]?.filename || old?.bank_file || null;
+
+      //   FIX DATE FORMAT ISSUE (IMPORTANT)
+      const convertDate = (dateStr) => {
+        if (!dateStr) return null;
+
+        // already yyyy-mm-dd
+        if (dateStr.includes("-")) {
+          return dateStr;
+        }
+
+        const [dd, mm, yyyy] = dateStr.split("/");
+
+        return `${yyyy}-${mm}-${dd}`;
+      };
+
+      const joiningDate = new Date(convertDate(d.date_of_joining));
+
+      if (isNaN(joiningDate.getTime())) {
+        return res.status(400).json({
+          message: "Invalid Date of Joining",
+        });
+      }
+
+      const today = new Date();
+
+      let lastAppraisal = new Date(joiningDate);
+
+      while (lastAppraisal <= today) {
+        lastAppraisal.setFullYear(lastAppraisal.getFullYear() + 1);
+      }
+
+      const nextAppraisal = new Date(lastAppraisal);
+      lastAppraisal.setFullYear(lastAppraisal.getFullYear() - 1);
+
+      const sql = `
+        UPDATE employee_personal_details
+        SET
+          emp_name=?,
+          aadhaar_number=?,
+          pan_number=?,
+          date_of_birth=?,
+          date_of_joining=?,
+          bank_account_number=?,
+          ifsc_code=?,
+          aadhaar_file=?,
+          pan_file=?,
+          bank_file=?,
+          last_appraisal_date=?,
+          next_appraisal_date=?
+        WHERE emp_id=?
+      `;
+
+      db.query(
+        sql,
+        [
+          d.emp_name,
+          d.aadhaar_number || null,
+          d.pan_number || null,
+          convertDate(d.date_of_birth),
+          convertDate(d.date_of_joining),
+          d.bank_account_number || null,
+          d.ifsc_code || null,
+          aadhaarFile,
+          panFile,
+          bankFile,
+          lastAppraisal,
+          nextAppraisal,
+          req.params.emp_id,
+        ],
+        (err2) => {
+          if (err2) {
+            console.log("SQL ERROR:", err2.sqlMessage);
+            return res.status(500).json({
+              message: err2.sqlMessage,
+            });
+          }
+
+          return res.json({
+            message: "Updated Successfully",
+          });
+        },
+      );
+    });
+  },
+);
+// ======================================================
+// DELETE EMPLOYEE PERSONAL DETAILS
+// ======================================================
+
+app.delete(
+  "/api/personal-details/:emp_id",
+
+  (req, res) => {
+    const sql = `
+
+        DELETE FROM employee_personal_details
+
+        WHERE emp_id=?
+        `;
+
+    db.query(
+      sql,
+
+      [req.params.emp_id],
+
+      (err) => {
+        if (err) {
+          return res.status(500).json(err);
+        }
+
+        res.json({
+          message: "Employee Deleted Successfully",
+        });
+      },
+    );
+  },
+);
+
+// ======================================================
+// DOWNLOAD SINGLE FILE
+// ======================================================
+
+app.get("/api/download-file/:type/:filename", (req, res) => {
+  const { type, filename } = req.params;
+
+  let folder = "";
+
+  if (type === "aadhaar") {
+    folder = "uploads/aadhaar";
+  }
+
+  if (type === "pan") {
+    folder = "uploads/pan";
+  }
+
+  if (type === "bank") {
+    folder = "uploads/bank";
+  }
+
+  const filePath = path.join(__dirname, folder, filename);
+
+  res.download(filePath, filename, (err) => {
+    if (err) {
+      console.log(err);
+
+      return res.status(500).json({
+        message: "File download failed",
+      });
+    }
   });
 });
 
-app.put("/api/daily-status/approve/:id", (req, res) => {
-  db.query(
-    "UPDATE daily_status SET status='approved' WHERE id=?",
-    [req.params.id],
-    (err) => {
-      if (err) return res.status(500).json(err);
-      res.json({ message: "Approved" });
-    },
-  );
+// ======================================================
+// DOWNLOAD FULL EMPLOYEE ZIP
+// ======================================================
+
+// app.get("/api/download-employee/:emp_id", (req, res) => {
+//   const sql = `
+//     SELECT *
+//     FROM employee_personal_details
+//     WHERE emp_id=?
+//   `;
+
+//   db.query(sql, [req.params.emp_id], (err, result) => {
+//     if (err) {
+//       console.log(err);
+//       return res.status(500).json(err);
+//     }
+
+//     if (result.length === 0) {
+//       return res.status(404).json({
+//         message: "Employee not found",
+//       });
+//     }
+
+//     const emp = result[0];
+
+//     // ZIP FILE NAME
+//     const zipName = `${emp.emp_id}.zip`;
+
+//     // IMPORTANT
+//     res.attachment(zipName);
+
+//     // CREATE ZIP
+//     const archive = archiver("zip", {
+//       zlib: { level: 9 },
+//     });
+
+//     // ERROR HANDLE
+//     archive.on("error", (err) => {
+//       throw err;
+//     });
+
+//     // SEND ZIP TO RESPONSE
+//     archive.pipe(res);
+
+//     // ================= TEXT FILE =================
+
+//     const details = `
+// EMPLOYEE DETAILS
+
+// Employee ID : ${emp.emp_id}
+// Employee Name : ${emp.emp_name}
+
+// DOB : ${emp.date_of_birth}
+// DOJ : ${emp.date_of_joining}
+
+// AADHAAR : ${emp.aadhaar_number}
+// PAN : ${emp.pan_number}
+
+// BANK : ${emp.bank_account_number}
+// IFSC : ${emp.ifsc_code}
+
+// LAST APPRAISAL : ${emp.last_appraisal_date}
+// NEXT APPRAISAL : ${emp.next_appraisal_date}
+// `;
+
+//     archive.append(details, {
+//       name: "employee-details.txt",
+//     });
+
+//     // ================= AADHAAR =================
+
+//     if (emp.aadhaar_file) {
+//       const aadhaarPath = path.join(
+//         __dirname,
+//         "uploads",
+//         "aadhaar",
+//         emp.aadhaar_file,
+//       );
+
+//       if (fs.existsSync(aadhaarPath)) {
+//         archive.file(aadhaarPath, {
+//           name: emp.aadhaar_file,
+//         });
+//       }
+//     }
+
+//     // ================= PAN =================
+
+//     if (emp.pan_file) {
+//       const panPath = path.join(__dirname, "uploads", "pan", emp.pan_file);
+
+//       if (fs.existsSync(panPath)) {
+//         archive.file(panPath, {
+//           name: emp.pan_file,
+//         });
+//       }
+//     }
+
+//     // ================= BANK =================
+
+//     if (emp.bank_file) {
+//       const bankPath = path.join(__dirname, "uploads", "bank", emp.bank_file);
+
+//       if (fs.existsSync(bankPath)) {
+//         archive.file(bankPath, {
+//           name: emp.bank_file,
+//         });
+//       }
+//     }
+
+//     // FINALIZE ZIP
+//     archive.finalize();
+//   });
+// });
+
+app.get("/api/download-employee/:emp_id", (req, res) => {
+  console.log("===== DOWNLOAD EMPLOYEE API =====");
+  console.log("archiver:", archiver);
+  console.log("typeof archiver:", typeof archiver);
+
+  const sql = `
+    SELECT *
+    FROM employee_personal_details
+    WHERE emp_id=?
+  `;
+
+  db.query(sql, [req.params.emp_id], (err, result) => {
+    if (err) {
+      console.log("DB ERROR:", err);
+      return res.status(500).json(err);
+    }
+
+    if (result.length === 0) {
+      return res.status(404).json({
+        message: "Employee not found",
+      });
+    }
+
+    const emp = result[0];
+
+    try {
+      const zipName = `${emp.emp_id}.zip`;
+
+      res.attachment(zipName);
+
+      const archive = archiver("zip", {
+        zlib: { level: 9 },
+      });
+
+      archive.on("error", (err) => {
+        console.log("ARCHIVE ERROR:", err);
+        if (!res.headersSent) {
+          res.status(500).json({
+            message: "ZIP creation failed",
+          });
+        }
+      });
+
+      archive.pipe(res);
+
+      const details = `
+EMPLOYEE DETAILS
+
+Employee ID : ${emp.emp_id}
+Employee Name : ${emp.emp_name}
+
+DOB : ${emp.date_of_birth}
+DOJ : ${emp.date_of_joining}
+
+AADHAAR : ${emp.aadhaar_number}
+PAN : ${emp.pan_number}
+
+BANK : ${emp.bank_account_number}
+IFSC : ${emp.ifsc_code}
+
+LAST APPRAISAL : ${emp.last_appraisal_date}
+NEXT APPRAISAL : ${emp.next_appraisal_date}
+`;
+
+      archive.append(details, {
+        name: "employee-details.txt",
+      });
+
+      if (emp.aadhaar_file) {
+        const aadhaarPath = path.join(
+          __dirname,
+          "uploads",
+          "aadhaar",
+          emp.aadhaar_file,
+        );
+
+        console.log("AADHAAR:", aadhaarPath);
+
+        if (fs.existsSync(aadhaarPath)) {
+          archive.file(aadhaarPath, {
+            name: emp.aadhaar_file,
+          });
+        }
+      }
+
+      if (emp.pan_file) {
+        const panPath = path.join(__dirname, "uploads", "pan", emp.pan_file);
+
+        console.log("PAN:", panPath);
+
+        if (fs.existsSync(panPath)) {
+          archive.file(panPath, {
+            name: emp.pan_file,
+          });
+        }
+      }
+
+      if (emp.bank_file) {
+        const bankPath = path.join(__dirname, "uploads", "bank", emp.bank_file);
+
+        console.log("BANK:", bankPath);
+
+        if (fs.existsSync(bankPath)) {
+          archive.file(bankPath, {
+            name: emp.bank_file,
+          });
+        }
+      }
+
+      archive.finalize();
+    } catch (e) {
+      console.log("DOWNLOAD ERROR:", e);
+      return res.status(500).json({
+        message: e.message,
+      });
+    }
+  });
+});
+// ======================================================
+// DOWNLOAD ALL EMPLOYEE
+// ======================================================
+
+app.get("/api/download-all-personal-files", (req, res) => {
+  const sql = `
+    SELECT *
+    FROM employee_personal_details
+  `;
+
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.log(err);
+      return res.status(500).json(err);
+    }
+
+    // ZIP NAME
+    res.attachment("all-employees-files.zip");
+
+    // CREATE ZIP
+    const archive = archiver("zip", {
+      zlib: { level: 9 },
+    });
+
+    // ERROR
+    archive.on("error", (err) => {
+      throw err;
+    });
+
+    // SEND ZIP
+    archive.pipe(res);
+
+    // LOOP ALL EMPLOYEES
+    results.forEach((emp) => {
+      // FOLDER NAME
+      const folderName = `${emp.emp_id}`;
+
+      // ================= TEXT FILE =================
+
+      const details = `
+EMPLOYEE DETAILS
+
+Employee ID : ${emp.emp_id}
+Employee Name : ${emp.emp_name}
+
+DOB : ${emp.date_of_birth}
+DOJ : ${emp.date_of_joining}
+
+AADHAAR : ${emp.aadhaar_number}
+PAN : ${emp.pan_number}
+
+BANK : ${emp.bank_account_number}
+IFSC : ${emp.ifsc_code}
+
+LAST APPRAISAL : ${emp.last_appraisal_date}
+NEXT APPRAISAL : ${emp.next_appraisal_date}
+`;
+
+      archive.append(details, {
+        name: `${folderName}/employee-details.txt`,
+      });
+
+      // ================= AADHAAR FILE =================
+
+      if (emp.aadhaar_file) {
+        const aadhaarPath = path.join(
+          __dirname,
+          "uploads",
+          "aadhaar",
+          emp.aadhaar_file,
+        );
+
+        if (fs.existsSync(aadhaarPath)) {
+          archive.file(aadhaarPath, {
+            name: `${folderName}/aadhaar-${emp.aadhaar_file}`,
+          });
+        }
+      }
+
+      // ================= PAN FILE =================
+
+      if (emp.pan_file) {
+        const panPath = path.join(__dirname, "uploads", "pan", emp.pan_file);
+
+        if (fs.existsSync(panPath)) {
+          archive.file(panPath, {
+            name: `${folderName}/pan-${emp.pan_file}`,
+          });
+        }
+      }
+
+      // ================= BANK FILE =================
+
+      if (emp.bank_file) {
+        const bankPath = path.join(__dirname, "uploads", "bank", emp.bank_file);
+
+        if (fs.existsSync(bankPath)) {
+          archive.file(bankPath, {
+            name: `${folderName}/bank-${emp.bank_file}`,
+          });
+        }
+      }
+    });
+
+    // FINALIZE
+    archive.finalize();
+  });
 });
 
-app.put("/api/daily-status/reject/:id", (req, res) => {
-  db.query(
-    "UPDATE daily_status SET status='rejected' WHERE id=?",
-    [req.params.id],
-    (err) => {
-      if (err) return res.status(500).json(err);
-      res.json({ message: "Rejected" });
-    },
-  );
-});
+
+// navya
+
 // ================= PROXY ROUTES FOR PAYSLIP SERVER =================
 
 // Proxy all employee-related requests to payslip server
@@ -753,6 +2340,43 @@ app.delete('/api/payslips/:id', async (req, res) => {
     });
   }
 });
+// Proxy single payslip fetch
+app.get('/api/payslips/single/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const targetUrl = `${PAYSLIP_API_URL}/payslips/single/${id}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    
+    const response = await axios.get(targetUrl);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('❌ Single payslip fetch error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to fetch payslip',
+      details: error.message
+    });
+  }
+});
+
+
+// Proxy payslips by month and year
+app.get('/api/payslips/:year/:month', async (req, res) => {
+  try {
+    const { year, month } = req.params;
+    const targetUrl = `${PAYSLIP_API_URL}/payslips/${year}/${month}`;
+    console.log(`🔄 Proxying to: ${targetUrl}`);
+    
+    const response = await axios.get(targetUrl);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('❌ Payslips fetch error:', error.message);
+    res.status(error.response?.status || 500).json({
+      error: 'Failed to fetch payslips',
+      details: error.message
+    });
+  }
+});
+
 
 // Proxy reports
 app.get('/api/reports/monthly/:year/:month', async (req, res) => {
@@ -880,7 +2504,7 @@ app.use((req, res) => {
 });
 
 // ================= START SERVER =================
-const PORT = process.env.BACKEND_PORT || 7015;
+const PORT = process.env.BACKEND_PORT || 7017;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });

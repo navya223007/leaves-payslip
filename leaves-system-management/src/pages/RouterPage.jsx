@@ -23,6 +23,20 @@ import PayslipApp from "../payslip/PayslipApp";
 import ViewPDF from "../payslip/ViewPDF";
 import EmployeeViewPDF from "../payslip/EmployeeViewPDF";
 
+
+/* ================= PERSONAL DETAILS ================= */
+import EmployeePersonalDetails from "./EmployeePersonalDetails";
+import CreateEmployeePersonalDetails from "./CreateEmployeePersonalDetails";
+import PersonalDetailsList from "./PersonalDetailsList";
+import ReadEmployeePersonalDetails from "./ReadEmployeePersonalDetails";
+import EditEmployeePersonalDetails from "./EditEmployeePersonalDetails";
+
+/* ================= MY PROFILE ================= */
+import MyProfile from "./MyProfile";
+import ReadMyProfile from "./ReadMyProfile";
+import EditMyProfile from "./EditMyProfile";
+
+
 import ProtectedRoute from "./ProtectedRoute";
 
 function RouterPage() {
@@ -49,10 +63,33 @@ function RouterPage() {
         <Route path="leaves" element={<PendingLeaves />} />
         <Route path="admin-reports" element={<AdminPageReport />} />
         <Route path="employee-status" element={<AdminEmployeeStatus />} />
+
+  <Route path="employee-details" element={<EmployeePersonalDetails />} />
+
+        <Route
+          path="employee-details/create"
+          element={<CreateEmployeePersonalDetails />}
+        />
+
+        <Route
+          path="employee-details-personal/list"
+          element={<PersonalDetailsList />}
+        />
+
+        <Route
+          path="employee-details/read/:emp_id"
+          element={<ReadEmployeePersonalDetails />}
+        />
+
+        <Route
+          path="employee-details/edit/:emp_id"
+          element={<EditEmployeePersonalDetails />}
+        />
+
         <Route path="change-password" element={<ChangePassword />} />
         <Route path="payslips" element={<PayslipApp />} />
-{/* // Remove the :id from route */}
-<Route path="payslips/view-pdf" element={<ViewPDF />} />
+        {/* // Remove the :id from route */}
+        <Route path="payslips/view-pdf/:id" element={<ViewPDF />} />
       </Route>
 
       {/* EMPLOYEE ROUTES */}
@@ -72,6 +109,12 @@ function RouterPage() {
           path="daily-status-report"
           element={<EmployeeDailyStatusReport />}
         />
+
+          <Route path="my-details" element={<MyProfile />} />
+
+        <Route path="my-details/read/:emp_id" element={<ReadMyProfile />} />
+
+        <Route path="my-details/edit/:emp_id" element={<EditMyProfile />} />
         <Route path="change-password" element={<ChangePassword />} />
         <Route path="download-payslips" element={<DownloadPayslips />} />
         <Route path="payslip-view" element={<EmployeeViewPDF />} />

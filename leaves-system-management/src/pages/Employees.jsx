@@ -5,201 +5,406 @@ import { FaEye, FaEdit, FaTrash } from "react-icons/fa";
 
 function Employees() {
   const navigate = useNavigate();
+
   const [employees, setEmployees] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // ✅ DEFINE OUTSIDE (REUSABLE)
+  const itemsPerPage = 10;
 
-  // DELETE
-  const handleDelete = async (id) => {
-    if (!id) {
-      alert("Invalid ID");
-      return;
-    }
+  const totalPages = Math.ceil(employees.length / itemsPerPage);
 
-    const confirmDelete = window.confirm("Are you sure you want to delete?");
-    if (!confirmDelete) return;
+  const paginatedEmployees = employees.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
 
-    try {
-      await api.delete(`/employees/${id}`);
+  // ================= PAGINATION =================
 
-      alert("Deleted successfully");
-
-      // ✅ refresh employees list
-      const res = await api.get("/employees-reports");
-
-      setEmployees(res.data);
-    } catch (err) {
-      console.log(err);
-
-      if (err.response?.status === 403) {
-        alert("Session expired");
-        navigate("/");
-      } else {
-        alert("Delete failed");
-      }
+  const goPrev = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
     }
   };
 
-  const loadEmployees = React.useCallback(async () => {
-    try {
-      const res = await api.get("/employees-reports");
-
-      setEmployees(res.data);
-    } catch (error) {
-      console.log("Error fetching employees:", error);
-
-      if (error.response?.status === 403) {
-        alert("Session expired. Please login again.");
-        navigate("/");
-      }
+  const goNext = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
     }
-  }, [navigate]);
+  };
 
   useEffect(() => {
+    setCurrentPage(1);
+  }, [employees]);
+
+  // ================= DELETE =================
+
+  const handleDelete = async (id) => {
+    if (!id) return;
+
+    const confirmDelete = window.confirm("Are you sure you want to delete?");
+
+    if (!confirmDelete) return;
+
+    await api.delete("/employees/" + id);
+
+    const res = await api.get("/employees-reports");
+
+    setEmployees(res.data);
+  };
+
+  // ================= LOAD =================
+
+  useEffect(() => {
+    const loadEmployees = async () => {
+      try {
+        const res = await api.get("/employees-reports");
+        setEmployees(res.data);
+      } catch (err) {
+        console.error("Error loading employees:", err);
+      }
+    };
+
     loadEmployees();
-  }, [loadEmployees]);
+  }, []);
+
+  // ================= ROW COLORS =================
+
+  const getRowStyle = (empId) => {
+    if (!empId) return {};
+
+    if (empId.startsWith("ADMIN")) {
+      return {
+        background:
+          "linear-gradient(90deg, rgba(239,68,68,0.18), rgba(220,38,38,0.10))",
+        borderLeft: "8px solid #dc2626",
+      };
+    }
+
+    if (empId.startsWith("EMP")) {
+      return {
+        background:
+          "linear-gradient(90deg, rgba(59,130,246,0.18), rgba(37,99,235,0.10))",
+        borderLeft: "8px solid #2563eb",
+      };
+    }
+
+    if (empId.startsWith("SES-SE")) {
+      return {
+        background:
+          "linear-gradient(90deg, rgba(139,92,246,0.18), rgba(124,58,237,0.10))",
+        borderLeft: "8px solid #7c3aed",
+      };
+    }
+
+    if (empId.startsWith("SES-TE")) {
+      return {
+        background:
+          "linear-gradient(90deg, rgba(16,185,129,0.18), rgba(5,150,105,0.10))",
+        borderLeft: "8px solid #059669",
+      };
+    }
+
+    if (empId.startsWith("SES-HR")) {
+      return {
+        background:
+          "linear-gradient(90deg, rgba(245,158,11,0.18), rgba(217,119,6,0.10))",
+        borderLeft: "8px solid #d97706",
+      };
+    }
+
+    if (empId.startsWith("SES-TST")) {
+      return {
+        background:
+          "linear-gradient(90deg, rgba(236,72,153,0.18), rgba(219,39,119,0.10))",
+        borderLeft: "8px solid #db2777",
+      };
+    }
+
+    return {};
+  };
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-blue-600 p-4 md:p-6 lg:p-8 xl:p-10">
-      {/* Animated Shapes */}
-      <div className="absolute w-24 h-24 md:w-32 md:h-32 xl:w-40 xl:h-40 bg-sky-400 rounded-full top-10 left-5 opacity-30 animate-pulse"></div>
-      <div className="absolute w-32 h-32 md:w-44 md:h-44 xl:w-52 xl:h-52 bg-purple-400 rounded-full bottom-10 right-5 opacity-30 animate-pulse"></div>
-      <div className="absolute w-20 h-20 md:w-28 md:h-28 xl:w-36 xl:h-36 bg-green-400 rounded-full top-1/2 right-1/4 opacity-30 animate-pulse"></div>
+    <>
+      {/* ================= CSS ================= */}
 
-      <div className="relative z-10 max-w-7xl mx-auto">
-        {/* HEADER */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-          <h2 className=" text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold">
-            Employee List
-          </h2>
+      <style>{`
 
-          <button
-            onClick={() => navigate("/admin/create-employees")}
-            className="btn btn-success px-4 py-2 text-sm md:text-base xl:text-lg"
-          >
-            + Create Employee
-          </button>
-        </div>
+        .employeePage{
+          min-height:100vh;
+        }
 
-        {/* TABLE */}
-        <div className="bg-white bg-opacity-95 p-4 lg:p-6 xl:p-8 rounded-lg shadow-lg overflow-x-auto">
-          <table className="table table-bordered table-hover text-nowrap w-full">
-            <thead className="table-primary">
-              <tr>
-                <th className="px-2 py-2 text-xs md:text-sm xl:text-base">
-                  Emp ID
-                </th>
-                <th className="px-2 py-2 text-xs md:text-sm xl:text-base">
-                  Name
-                </th>
-                <th className="px-2 py-2 text-xs md:text-sm xl:text-base">
-                  Email
-                </th>
-                <th className="px-2 py-2 text-xs md:text-sm xl:text-base">
-                  Role
-                </th>
-                <th className="px-2 py-2 text-xs md:text-sm xl:text-base">
-                  Department
-                </th>
-                <th className="px-2 py-2 text-xs md:text-sm xl:text-base hidden lg:table-cell">
-                  Sub Department
-                </th>
-                <th className="px-2 py-2 text-xs md:text-sm xl:text-base hidden md:table-cell">
-                  Employee Type
-                </th>
-                <th className="px-2 py-2 text-xs md:text-sm xl:text-base">
-                  Actions
-                </th>
-              </tr>
-            </thead>
+        .employeeTitle{
+          font-size:28px;
+          font-weight:700;
+        }
 
-            <tbody>
-              {employees.length > 0 ? (
-                employees.map((emp) => (
-                  <tr key={emp.id}>
-                    <td className="px-2 py-2 text-xs md:text-sm xl:text-base">
-                      {emp.emp_id}
-                    </td>
-                    <td className="px-2 py-2 text-xs md:text-sm xl:text-base">
-                      {emp.name}
-                    </td>
-                    <td className="px-2 py-2 text-xs md:text-sm xl:text-base">
-                      {emp.email}
-                    </td>
-                    <td className="px-2 py-2 text-xs md:text-sm xl:text-base">
-                      {emp.role}
-                    </td>
-                    <td className="px-2 py-2 text-xs md:text-sm xl:text-base">
-                      {emp.department}
-                    </td>
-                    <td className="px-2 py-2 text-xs md:text-sm xl:text-base hidden lg:table-cell">
-                      {emp.subDepartment}
-                    </td>
-                    <td className="px-2 py-2 text-xs md:text-sm xl:text-base hidden md:table-cell">
-                      {emp.employeeType}
-                    </td>
+        .employeeCard{
+          border-radius:24px;
+          overflow:hidden;
+          transition:0.3s;
+          padding:24px;
+        }
 
-                    <td className="px-2 py-2">
-                      <div
-                        className="d-flex flex-wrap justify-content-center"
-                        style={{
-                          gap: "6px", // 🔥 better spacing than gap-1
-                          minWidth: "120px", // 🔥 prevents collapse on mobile
-                        }}
-                      >
-                        <button
-                          onClick={() =>
-                            navigate(`/admin/employees/view/${emp.id}`)
-                          }
-                          className="btn btn-sm btn-primary d-flex align-items-center justify-content-center"
-                          style={{ minWidth: "36px" }}
-                        >
-                          <FaEye />
-                        </button>
+        /* ================= LIGHT MODE ================= */
 
-                        <button
-                          onClick={() =>
-                            navigate(`/admin/employees/edit/${emp.id}`)
-                          }
-                          className="btn btn-sm btn-warning d-flex align-items-center justify-content-center"
-                          style={{ minWidth: "36px" }}
-                        >
-                          <FaEdit />
-                        </button>
+        .bg-light .employeeCard{
+          background:#f2f3f3;
+          color:#111827;
+          box-shadow:0 10px 25px rgba(0,0,0,0.08);
+        }
 
-                        <button
-                          onClick={() => handleDelete(emp.id)}
-                          className="btn btn-sm btn-danger d-flex align-items-center justify-content-center"
-                          style={{ minWidth: "36px" }}
-                        >
-                          <FaTrash />
-                        </button>
-                      </div>
-                    </td>
+        /* ================= DARK MODE ================= */
+
+        .bg-dark .employeeCard{
+          background:#1e1e1e;
+          color:#f3f4f6;
+          box-shadow:0 10px 25px rgba(0,0,0,0.35);
+          border:1px solid #333;
+        }
+
+        /* ================= TABLE ================= */
+
+        .employeeTable{
+          border-collapse:separate;
+          border-spacing:0 12px;
+        }
+
+        .employeeTable td,
+        .employeeTable th{
+          background:transparent !important;
+          vertical-align:middle;
+          border:none !important;
+        }
+
+        /* ================= LIGHT MODE TABLE TEXT ================= */
+
+        .bg-light .employeeTable td{
+          color:#111827 !important;
+          font-weight:500;
+        }
+
+        .bg-light .employeeTable th{
+          color:#ffffff !important;
+          font-weight:700;
+        }
+
+        /* ================= DARK MODE TABLE TEXT ================= */
+
+        .bg-dark .employeeTable td{
+          color:#f3f4f6 !important;
+          font-weight:500;
+        }
+
+        .bg-dark .employeeTable th{
+          color:#ffffff !important;
+          font-weight:700;
+        }
+
+        /* ================= TABLE HEADER ================= */
+
+        .employeeTable thead tr{
+          background:#0d6efd;
+        }
+
+        .employeeTable thead th{
+          padding:16px;
+          font-size:14px;
+          letter-spacing:0.3px;
+        }
+
+        /* ================= ROW HOVER ================= */
+
+        .employeeTable tbody tr{
+          transition:0.25s ease;
+        }
+
+        .employeeTable tbody tr:hover{
+          transform:translateY(-2px);
+        }
+
+        /* ================= PAGINATION ================= */
+
+        .paginationText{
+          font-size:15px;
+          font-weight:600;
+        }
+
+        .bg-dark .paginationText{
+          color:#ffffff;
+        }
+
+        .bg-light .paginationText{
+          color:#111827;
+        }
+
+        /* ================= BUTTONS ================= */
+
+        .actionBtn{
+          width:34px;
+          height:34px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          border-radius:10px;
+        }
+
+        /* ================= RESPONSIVE ================= */
+
+        @media(max-width:768px){
+
+          .employeeCard{
+            padding:16px;
+          }
+
+          .employeeTitle{
+            font-size:22px;
+          }
+
+          .employeeTable thead th{
+            font-size:13px;
+          }
+
+          .employeeTable td{
+            font-size:13px;
+          }
+
+        }
+
+      `}</style>
+
+      {/* ================= PAGE ================= */}
+
+      <div className="employeePage p-3 p-md-4 p-lg-5">
+        <div className="container-fluid">
+          {/* ================= HEADER ================= */}
+
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h2 className="employeeTitle">Employee List</h2>
+          </div>
+
+          {/* ================= TABLE CARD ================= */}
+
+          <div className="employeeCard">
+            <div className="table-responsive">
+              <table className="table employeeTable align-middle text-nowrap w-100">
+                <thead>
+                  <tr>
+                    <th>Emp ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Password</th>
+                    <th>Role</th>
+                    <th>Department</th>
+                    <th>Sub Department</th>
+                    <th>Employee Type</th>
+                    <th className="text-center">Actions</th>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="8" className="text-center py-4">
-                    No Employees Found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                </thead>
 
-        {/* BACK BUTTON */}
-        <div className="mt-4">
-          <button
-            onClick={() => navigate("/admin/dashboard")}
-            className="btn btn-secondary px-4 py-2 text-sm md:text-base xl:text-lg"
-          >
-            ← Back
-          </button>
+                <tbody>
+                  {paginatedEmployees.length > 0 ? (
+                    paginatedEmployees.map((emp) => (
+                      <tr key={emp.id} style={getRowStyle(emp.emp_id)}>
+                        <td>{emp.emp_id}</td>
+
+                        <td>{emp.name}</td>
+
+                        <td>{emp.email}</td>
+
+                        <td>{emp.password}</td>
+
+                        <td>{emp.role}</td>
+
+                        <td>{emp.department}</td>
+
+                        <td>{emp.subDepartment}</td>
+
+                        <td>{emp.employeeType}</td>
+
+                        <td>
+                          <div className="d-flex gap-2 justify-content-center">
+                            {/* VIEW */}
+
+                            <button
+                              className="btn btn-primary btn-sm actionBtn"
+                              onClick={() =>
+                                navigate(`/admin/employees/view/${emp.id}`)
+                              }
+                            >
+                              <FaEye />
+                            </button>
+
+                            {/* EDIT */}
+
+                            <button
+                              className="btn btn-warning btn-sm actionBtn"
+                              onClick={() =>
+                                navigate(`/admin/employees/edit/${emp.id}`)
+                              }
+                            >
+                              <FaEdit />
+                            </button>
+                            {/* DELETE */}
+
+                            <button
+                              className="btn btn-danger btn-sm actionBtn"
+                              onClick={() => handleDelete(emp.id)}
+                            >
+                              <FaTrash />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="9" className="text-center py-5 fw-bold">
+                        No Employees Found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ================= PAGINATION ================= */}
+
+          <div className="d-flex justify-content-center align-items-center gap-3 mt-4">
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={goPrev}
+              disabled={currentPage === 1}
+            >
+              Prev
+            </button>
+
+            <span className="paginationText">
+              Page {currentPage} of {totalPages || 1}
+            </span>
+
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={goNext}
+              disabled={currentPage === totalPages || totalPages === 0}
+            >
+              Next
+            </button>
+          </div>
+
+          {/* ================= BACK BUTTON ================= */}
+
+          <div className="mt-4">
+            <button
+              onClick={() => navigate("/admin/dashboard")}
+              className="btn btn-secondary"
+            >
+              ← Back
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

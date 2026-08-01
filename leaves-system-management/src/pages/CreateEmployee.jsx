@@ -1,33 +1,23 @@
 import React, { useEffect, useState } from "react";
 import api from "../api";
 import { useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "../context/AuthContext.jsx";
 
 function CreateEmployee() {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  // Responsive detection
   const [isMobile, setIsMobile] = useState(window.innerWidth < 600);
 
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 600);
-    };
-
+    const handleResize = () => setIsMobile(window.innerWidth < 600);
     window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Inject animation styles safely (runs once)
   useEffect(() => {
     if (!document.getElementById("shape-animations")) {
       const style = document.createElement("style");
       style.id = "shape-animations";
-
       style.innerHTML = `
         @keyframes float1 {
           0% { transform: translate(0px, 0px) rotate(0deg); }
@@ -36,66 +26,61 @@ function CreateEmployee() {
           75% { transform: translate(-40px, -40px) rotate(270deg); }
           100% { transform: translate(0px, 0px) rotate(360deg); }
         }
-
         @keyframes float2 {
           0% { transform: translate(0,0); }
           50% { transform: translate(-90px,60px); }
           100% { transform: translate(0,0); }
         }
-
         @keyframes float3 {
           0% { transform: translate(0,0); }
           50% { transform: translate(100px,-60px); }
           100% { transform: translate(0,0); }
         }
-
         @keyframes float4 {
           0% { transform: translate(0,0) rotate(0deg); }
           50% { transform: translate(-80px,-80px) rotate(180deg); }
           100% { transform: translate(0,0) rotate(360deg); }
         }
-
         @keyframes float5 {
           0% { transform: rotate(45deg) translate(0,0); }
           50% { transform: rotate(225deg) translate(70px,50px); }
           100% { transform: rotate(405deg) translate(0,0); }
         }
-
         @keyframes float6 {
           0% { transform: translate(0,0); }
           50% { transform: translate(40px,-70px); }
           100% { transform: translate(0,0); }
         }
-
-        select option {
-          color: black;
-          background: white;
-        }
+        select option { color: black; background: white; }
       `;
-
       document.head.appendChild(style);
     }
   }, []);
 
   const [name, setName] = useState("");
-  const [empId, setEmpId] = useState(""); // 🔥 NEW STATE FOR EMP ID
+  const [empId, setEmpId] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [role, setRole] = useState("employee");
   const [department, setDepartment] = useState("");
   const [subDepartment, setSubDepartment] = useState("");
   const [employeeType, setEmployeeType] = useState("");
+  const [designation, setDesignation] = useState("");
 
-  // LOAD DATA FOR EDIT
+  const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // FETCH DATA ON LOAD FOR EDITING
   useEffect(() => {
     if (id) {
       api
         .get(`/employees/${id}`)
         .then((res) => {
           const data = res.data;
+          setDesignation(data.designation || "");
           setName(data.name || "");
-          setEmpId(data.emp_id || ""); // 🔥 LOAD EMP ID
+          setEmpId(data.emp_id || "");
           setEmail(data.email || "");
           setRole(data.role || "employee");
           setDepartment(data.department || "");
@@ -103,8 +88,7 @@ function CreateEmployee() {
           setEmployeeType(data.employeeType || "");
         })
         .catch((error) => {
-          console.log(error);
-
+          console.error(error);
           if (error.response?.status === 403) {
             alert("Unauthorized. Please login again.");
             navigate("/");
@@ -113,12 +97,7 @@ function CreateEmployee() {
     }
   }, [id, navigate]);
 
-  const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  // SUBMIT
-  const submitEmployee = React.useCallback(async () => {
+  const submitEmployee = async () => {
     setErrorMsg("");
     setSuccessMsg("");
 
@@ -126,47 +105,47 @@ function CreateEmployee() {
       setErrorMsg("Please fill in Name, Email and Password.");
       return;
     }
-
-    if (role === "employee" && (!department || !subDepartment || !employeeType)) {
-      setErrorMsg("Department, Sub Department, and Employee Type are required for employees.");
+    if (!designation) {
+      setErrorMsg("Please select designation");
       return;
     }
+
+    if (
+      role === "employee" &&
+      (!department || !subDepartment || !employeeType)
+    ) {
+      setErrorMsg(
+        "Department, Sub Department, and Employee Type are required for employees.",
+      );
+      return;
+    }
+
     try {
       setLoading(true);
+      const payload = {
+        designation,
+        name,
+        email,
+        role,
+        department,
+        employeeType,
+        subDepartment,
+      };
+
       if (id) {
-        await api.put(
-          `/employees/${id}`,
-          {
-            emp_id: empId, // 🔥 INCLUDE EMP ID
-            name,
-            email,
-            role,
-            department,
-            employeeType,
-            subDepartment,
-          }
-        );
+        // UPDATE API
+        await api.put(`/employees/${id}`, payload);
         setSuccessMsg("Employee Updated Successfully!");
       } else {
-        await api.post(
-          "/create-employees",
-          {
-            name,
-            email,
-            password,
-            role,
-            department,
-            employeeType,
-            subDepartment,
-          }
-        );
+        // CREATE API
+        payload.password = password;
+        await api.post(`/create-employees`, payload);
         setSuccessMsg("Employee Created Successfully!");
       }
 
       setTimeout(() => navigate("/admin/employees"), 2000);
     } catch (error) {
       console.error("❌ Save Error:", error);
-
       const serverMsg = error.response?.data?.message;
       if (error.response?.status === 403) {
         setErrorMsg(serverMsg || "Access Denied: You do not have permission.");
@@ -178,7 +157,7 @@ function CreateEmployee() {
     } finally {
       setLoading(false);
     }
-  }, [id, name, email, password, role, department, subDepartment, employeeType, empId, navigate]);
+  };
 
   return (
     <div style={pageContainer}>
@@ -191,55 +170,49 @@ function CreateEmployee() {
         <div style={{ ...shape, ...diamond }} />
       </div>
 
-      <div
-        style={{
-          ...card,
-          padding: isMobile ? "20px" : "30px 40px",
-        }}
-      >
+      <div style={{ ...card, padding: isMobile ? "20px" : "30px 40px" }}>
         <h2 style={title}>{id ? "Edit Employee" : "Create Employee"}</h2>
 
-        {errorMsg && (
-          <div
-            style={{
-              background: "rgba(239, 68, 68, 0.2)",
-              color: "#fca5a5",
-              padding: "10px",
-              borderRadius: "8px",
-              marginBottom: "15px",
-              textAlign: "center",
-              border: "1px solid rgba(239, 68, 68, 0.3)",
-            }}
-          >
-            {errorMsg}
-          </div>
-        )}
-
-        {successMsg && (
-          <div
-            style={{
-              background: "rgba(34, 197, 94, 0.2)",
-              color: "#86efac",
-              padding: "10px",
-              borderRadius: "8px",
-              marginBottom: "15px",
-              textAlign: "center",
-              border: "1px solid rgba(34, 197, 94, 0.3)",
-            }}
-          >
-            {successMsg}
-          </div>
-        )}
+        {errorMsg && <div style={errBanner}>{errorMsg}</div>}
+        {successMsg && <div style={successBanner}>{successMsg}</div>}
 
         {id && (
           <FormRow label="Employee ID" isMobile={isMobile}>
             <input
               value={empId}
               readOnly
-              style={{ ...input, backgroundColor: "rgba(255,255,255,0.05)", cursor: "not-allowed" }}
+              style={{
+                ...input,
+                backgroundColor: "rgba(255,255,255,0.05)",
+                cursor: "not-allowed",
+              }}
             />
           </FormRow>
         )}
+
+        <FormRow label="Designation" isMobile={isMobile}>
+          <select
+            value={designation}
+            onChange={(e) => setDesignation(e.target.value)}
+            style={input}
+          >
+            <option style={optionStyle} value="">
+              Select Designation
+            </option>
+            <option style={optionStyle} value="SE">
+              Software Engineer
+            </option>
+            <option style={optionStyle} value="HE">
+              Hardware Engineer
+            </option>
+            <option style={optionStyle} value="TESE">
+              Testing Engineer
+            </option>
+            <option style={optionStyle} value="TE">
+              Trainee Engineer
+            </option>
+          </select>
+        </FormRow>
 
         <FormRow label="Name" isMobile={isMobile}>
           <input
@@ -298,15 +271,16 @@ function CreateEmployee() {
             <option style={optionStyle} value="software">
               Software
             </option>
-            <option style={optionStyle} value="networking">
-              Networking
-            </option>
-            <option style={optionStyle} value="cloud">
-              Cloud
-            </option>
             <option style={optionStyle} value="hardware">
               Hardware
             </option>
+            <option style={optionStyle} value="networking">
+              Networking
+            </option>
+            <option style={optionStyle} value="testing">
+              Testing
+            </option>{" "}
+            {/* Fixed value here */}
             <option style={optionStyle} value="hr">
               HR
             </option>
@@ -334,12 +308,17 @@ function CreateEmployee() {
             <option style={optionStyle} value="fullstack">
               Fullstack
             </option>
-            <option style={optionStyle} value="devops">
-              DevOps
+            <option style={optionStyle} value="rd">
+              R & D
             </option>
-            <option style={optionStyle} value="cloud">
-              Cloud
-            </option>
+            <option style={optionStyle} value="camr">
+              CAMR
+            </option>{" "}
+            {/* Fixed value here */}
+            <option style={optionStyle} value="qc">
+              Quality checking(QC)
+            </option>{" "}
+            {/* Fixed value here */}
           </select>
         </FormRow>
 
@@ -372,7 +351,6 @@ function CreateEmployee() {
                 ? "Update Employee"
                 : "Create Employee"}
           </button>
-
           <button onClick={() => navigate("/admin/employees")} style={backBtn}>
             Back
           </button>
@@ -406,7 +384,25 @@ const FormRow = ({ label, children, isMobile }) => (
   </div>
 );
 
-// ================= STYLES =================
+// Style adjustments for notifications
+const errBanner = {
+  background: "rgba(239, 68, 68, 0.2)",
+  color: "#fca5a5",
+  padding: "10px",
+  borderRadius: "8px",
+  marginBottom: "15px",
+  textAlign: "center",
+  border: "1px solid rgba(239, 68, 68, 0.3)",
+};
+const successBanner = {
+  background: "rgba(34, 197, 94, 0.2)",
+  color: "#86efac",
+  padding: "10px",
+  borderRadius: "8px",
+  marginBottom: "15px",
+  textAlign: "center",
+  border: "1px solid rgba(34, 197, 94, 0.3)",
+};
 
 const pageContainer = {
   minHeight: "100vh",
@@ -420,7 +416,6 @@ const pageContainer = {
   fontFamily: "Segoe UI, sans-serif",
   padding: "15px",
 };
-
 const card = {
   position: "relative",
   zIndex: 2,
@@ -432,7 +427,6 @@ const card = {
   maxWidth: "600px",
   border: "2px solid rgba(255,255,255,0.2)",
 };
-
 const title = {
   textAlign: "center",
   marginBottom: "25px",
@@ -440,7 +434,6 @@ const title = {
   fontSize: "26px",
   fontWeight: "600",
 };
-
 const input = {
   flex: 1,
   padding: "10px 12px",
@@ -452,10 +445,7 @@ const input = {
   width: "100%",
   fontSize: "14px",
   transition: "0.3s",
-  appearance: "none",
-  WebkitAppearance: "none",
 };
-
 const buttonRow = {
   marginTop: "20px",
   display: "flex",
@@ -463,7 +453,6 @@ const buttonRow = {
   flexWrap: "wrap",
   gap: "10px",
 };
-
 const btn = {
   padding: "10px 18px",
   background: "linear-gradient(45deg,#22c55e,#16a34a)",
@@ -473,7 +462,6 @@ const btn = {
   cursor: "pointer",
   fontWeight: "600",
 };
-
 const backBtn = {
   padding: "10px 18px",
   background: "linear-gradient(45deg,#3b82f6,#2563eb)",
@@ -483,13 +471,7 @@ const backBtn = {
   cursor: "pointer",
   fontWeight: "600",
 };
-const optionStyle = {
-  backgroundColor: "#1e293b",
-  color: "white",
-};
-
-// SHAPES
-
+const optionStyle = { backgroundColor: "#1e293b", color: "white" };
 const shapesContainer = {
   position: "absolute",
   width: "100%",
@@ -499,12 +481,10 @@ const shapesContainer = {
   overflow: "hidden",
   zIndex: 1,
 };
-
 const shape = {
   position: "absolute",
   border: "2px solid rgba(255,255,255,0.4)",
 };
-
 const circle = {
   width: "120px",
   height: "120px",
@@ -513,7 +493,6 @@ const circle = {
   left: "8%",
   animation: "float1 12s infinite linear",
 };
-
 const circle2 = {
   width: "80px",
   height: "80px",
@@ -522,7 +501,6 @@ const circle2 = {
   right: "10%",
   animation: "float2 10s infinite linear",
 };
-
 const square = {
   width: "100px",
   height: "100px",
@@ -530,7 +508,6 @@ const square = {
   left: "5%",
   animation: "float3 14s infinite linear",
 };
-
 const square2 = {
   width: "90px",
   height: "90px",
@@ -538,7 +515,6 @@ const square2 = {
   right: "15%",
   animation: "float4 11s infinite linear",
 };
-
 const diamond = {
   width: "70px",
   height: "70px",
@@ -547,7 +523,6 @@ const diamond = {
   transform: "rotate(45deg)",
   animation: "float5 13s infinite linear",
 };
-
 const triangle = {
   width: 0,
   height: 0,

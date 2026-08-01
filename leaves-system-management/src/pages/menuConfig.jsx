@@ -3,37 +3,55 @@ import {
   FaUsers,
   FaClock,
   FaFileAlt,
-  FaEye,
   FaKey,
   FaMoneyCheckAlt,
   FaTasks,
+  FaIdCard,
+  FaUserPlus,
 } from "react-icons/fa";
+import { FaClipboardList } from "react-icons/fa";
 
 export const adminMenu = [
   {
-    label: "Dashboard",
+    label: "Admin Dashboard",
     path: "/admin",
     icon: FaTachometerAlt,
   },
+
   {
-    label: "Employees",
+    label: "Create Employee",
+    path: "/admin/create-employees",
+    icon: FaUserPlus,
+  },
+
+  {
+    label: "Employees Details",
     path: "/admin/employees",
     icon: FaUsers,
   },
+
   {
-    label: "Leaves",
+    label: "Pending Leaves",
     path: "/admin/leaves",
     icon: FaClock,
   },
+
   {
-    label: "Reports",
+    label: "Leaves Reports",
     path: "/admin/admin-reports",
     icon: FaFileAlt,
   },
+
   {
-    label: "Daily Status",
+    label: "Daily Status Reports ",
     path: "/admin/employee-status",
-    icon: FaEye,
+    icon: FaClipboardList,
+  },
+    // ✅ NEW
+  {
+    label: "Employee Personal Details",
+    path: "/admin/employee-details",
+    icon: FaIdCard,
   },
   {
     label: "Change Password",
@@ -49,7 +67,7 @@ export const adminMenu = [
 
 export const employeeMenu = [
   {
-    label: "Dashboard",
+    label: "Employe Dashboard",
     path: "/employee",
     icon: FaTachometerAlt,
   },
@@ -67,6 +85,11 @@ export const employeeMenu = [
     label: "Daily Status",
     path: "/employee/daily-status",
     icon: FaTasks,
+  },
+      {
+    label: "My Profile",
+    path: "/employee/my-details",
+    icon: FaIdCard,
   },
   {
     label: "Change Password",

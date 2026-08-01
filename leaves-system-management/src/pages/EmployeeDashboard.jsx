@@ -1,20 +1,15 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../api";
 import LeaveCard from "./LeaveCard";
 import { useAuth } from "../context/AuthContext.jsx";
 
 function EmployeeDashboard() {
-  // const API = `http://localhost:7015`;
-  // const API = `http://localhost:7015`;
-  const API = ``;
   const { user } = useAuth();
   const [leaves, setLeaves] = useState([]);
 
-  // ================= FETCH =================
   const fetchLeaves = async () => {
     try {
-      const res = await axios.get(`${API}/api/leaves/employee/${user.emp_id}`, { withCredentials: true });
-
+      const res = await api.get(`/api/leaves/employee/${user.emp_id}`);
       setLeaves(res.data);
     } catch (err) {
       console.log(err.message);
@@ -22,20 +17,19 @@ function EmployeeDashboard() {
   };
 
   useEffect(() => {
-    if (user?.emp_id) fetchLeaves();
+    if (user?.emp_id) {
+      fetchLeaves();
+    }
   }, [user?.emp_id]);
 
-  // ================= MARK AS VIEW =================
   const handleMarkRead = async (id) => {
     try {
-      await axios.put(`${API}/api/leaves/mark-read/${id}`, {}, { withCredentials: true });
-
+      await api.put(`/api/leaves/mark-read/${id}`);
       fetchLeaves();
     } catch (err) {
       console.log(err.message);
     }
   };
-
   return (
     <div className="container mt-3">
       {/* HEADER SECTION */}

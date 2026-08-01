@@ -98,8 +98,7 @@ function PayslipApp() {
       dt.getDate()===+d && dt.getMonth()+1===+m && dt.getFullYear()===+y;
   };
 
-  const calculatePF = (basic, applicable) => applicable ? parseFloat(basic)*0.12 : 0;
-
+ const calculatePF = (basic, applicable) => applicable ? Math.min(parseFloat(basic)*0.12, 1800) : 0;
   // const fetchEmployees = useCallback(async () => {
   //   setLoading(true);
   //   try {

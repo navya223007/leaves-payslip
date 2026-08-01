@@ -1,14 +1,15 @@
 import React from "react";
-import axios from "axios";
+import api from "../api";
 import { FaEdit } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-
-function LeaveCard({ data = {}, onDelete, showActions = false }) {
-  // const API = `http://localhost:7015`;
-//  const API = `http://localhost:7015`;
-const API = ``;
+function LeaveCard({
+  data = {},
+  onDelete,
+  showActions = false,
+  onApprove,
+  onReject,
+}) {
   const navigate = useNavigate();
-  // Token handled by cookie
 
   const id = data.id;
   const status = data.status || "pending";
@@ -22,60 +23,23 @@ const API = ``;
     navigate("/employee/leave", { state: { leave: data } });
   };
 
-  // // ================= VIEW =================
-  // const handleView = () => {
-  //   navigate("/employee/leave/view", { state: { leave: data } });
-  // };
   // ================= MARK AS VIEW =================
   const handleMarkRead = async () => {
     try {
-      await axios.put(
-        `${API}/api/leaves/mark-read/${id}`,
-        {},
-        { withCredentials: true }
-      );
-
-      onDelete?.(id); // ✅ HERE (correct)
-    } catch (err) {
-      console.log(err.message);
-    }
-  };
-  // ================= APPROVE =================
-  const handleApprove = async () => {
-    try {
-      await axios.put(
-        `${API}/api/leaves/approve/${id}`,
-        {},
-        { withCredentials: true }
-      );
-
-      onDelete?.(id); // ✅ HERE (correct)
+      await api.put(`/api/leaves/mark-read/${id}`);
+      onDelete?.(id);
     } catch (err) {
       console.log(err.message);
     }
   };
 
-  // ================= REJECT =================
-  const handleReject = async () => {
-    const reason = prompt("Enter reject reason:");
-    if (!reason) return;
-
-    try {
-      await axios.put(
-        `${API}/api/leaves/reject/${id}`,
-        { reason },
-        { withCredentials: true }
-      );
-
-      onDelete?.(id); // ✅ HERE (correct)
-    } catch (err) {
-      console.log(err.message);
-    }
-  };
   // ================= SAFE DATES =================
   const getDates = () => {
     if (!data.selected_dates) return [];
-    if (Array.isArray(data.selected_dates)) return data.selected_dates;
+
+    if (Array.isArray(data.selected_dates)) {
+      return data.selected_dates;
+    }
 
     try {
       return JSON.parse(data.selected_dates);
@@ -86,12 +50,15 @@ const API = ``;
 
   const formatDate = (d) => {
     if (!d) return "N/A";
+
     const dt = new Date(d);
+
     return isNaN(dt.getTime()) ? "N/A" : dt.toLocaleString();
   };
 
   const getReason = () => {
     if (!data.reason_type) return "N/A";
+
     return data.reason_type === "other"
       ? data.reason_text || "N/A"
       : data.reason_type;
@@ -101,6 +68,7 @@ const API = ``;
     if (type === "half") return "Half Day";
     if (type === "full") return "Full Day";
     if (type === "multi") return "Multiple Days";
+
     return "N/A";
   };
 
@@ -116,32 +84,36 @@ const API = ``;
         <p>
           <b>Emp ID:</b> {empId}
         </p>
+
         <p>
           <b>Name:</b> {name}
         </p>
+
         <p>
           <b>Department:</b> {department}
         </p>
+
         <p>
-          <b>Applied:</b> {formatDate(data.created_at)}
+          <b>Applied Time:</b> {formatDate(data.created_at)}
         </p>
+
         <p>
           <b>Reason:</b> {getReason()}
         </p>
 
         {data.date && (
           <p>
-            <b>Date:</b> {data.date} {data.session && `(${data.session})`}
+            <b>Leave Date:</b> {new Date(data.date).toLocaleDateString("en-GB")}
+            {data.session && ` (${data.session})`}
           </p>
         )}
 
         {getDates().length > 0 && (
           <p>
-            <b>Dates:</b> {getDates().join(", ")}
+            <b>Leave Dates:</b> {getDates().join(", ")}
           </p>
         )}
 
-        {/* STATUS */}
         <p>
           <b>Status:</b>{" "}
           <span
@@ -157,11 +129,24 @@ const API = ``;
           </span>
         </p>
 
-        {/* FIXED HEIGHT REJECT */}
-        {status === "rejected" && (
-          <p className="text-danger mb-2" style={{ minHeight: "24px" }}>
-            <b>Reject:</b> {data.reject_reason || "-"}
+        {status === "approved" && data.approved_at && (
+          <p className="text-success">
+            <b>Approved Time:</b> {formatDate(data.approved_at)}
           </p>
+        )}
+
+        {status === "rejected" && (
+          <>
+            {data.rejected_at && (
+              <p className="text-danger">
+                <b>Rejected Time:</b> {formatDate(data.rejected_at)}
+              </p>
+            )}
+
+            <p className="text-danger">
+              <b>Reject Reason:</b> {data.reject_reason || "-"}
+            </p>
+          </>
         )}
       </div>
 
@@ -181,11 +166,17 @@ const API = ``;
 
         {showActions && status === "pending" && (
           <>
-            <button onClick={handleApprove} className="btn btn-success btn-sm">
+            <button
+              onClick={() => onApprove?.(id)}
+              className="btn btn-success btn-sm"
+            >
               Approve
             </button>
 
-            <button onClick={handleReject} className="btn btn-danger btn-sm">
+            <button
+              onClick={() => onReject?.(id)}
+              className="btn btn-danger btn-sm"
+            >
               Reject
             </button>
           </>

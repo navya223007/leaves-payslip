@@ -8,7 +8,7 @@ function AdminDashboard() {
     rejected: 0,
   });
 
-  const fetchCounts = React.useCallback(async () => {
+  const fetchCounts = async () => {
     try {
       const res = await api.get("/api/dashboard/admin-counts");
 
@@ -20,11 +20,12 @@ function AdminDashboard() {
     } catch (err) {
       console.log(err.message);
     }
-  }, []);
+  };
 
   useEffect(() => {
     fetchCounts();
-  }, [fetchCounts]);
+  }, []);
+
   return (
     <div className="container-fluid p-3" style={{ minHeight: "100%" }}>
       {/* TITLE */}

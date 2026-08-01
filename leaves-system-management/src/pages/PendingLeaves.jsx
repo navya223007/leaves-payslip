@@ -6,26 +6,24 @@ function PendingLeaves() {
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Token handled by cookie
-
   // ================= FETCH =================
-  const fetchLeaves = React.useCallback(async () => {
-    try {
-      setLoading(true);
-
-      const res = await api.get("/api/leaves/pending");
-
-      setLeaves(res.data || []);
-    } catch (err) {
-      console.log("FETCH ERROR:", err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
+    const fetchLeaves = async () => {
+      try {
+        setLoading(true);
+
+        const res = await api.get("/api/leaves/pending");
+
+        setLeaves(res.data || []);
+      } catch (err) {
+        console.log("FETCH ERROR:", err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchLeaves();
-  }, [fetchLeaves]);
+  }, []);
 
   // ================= REMOVE FROM UI =================
   const handleRemove = (id) => {
@@ -33,29 +31,73 @@ function PendingLeaves() {
   };
 
   // ================= APPROVE =================
-  const handleApprove = React.useCallback(async (id) => {
-    try {
-      await api.put(`/api/leaves/approve/${id}`, {});
+  // const handleApprove = async (id) => {
+  //   const confirmApprove = window.confirm(
+  //     "Do you want to continue approving this leave?",
+  //   );
 
+  //   // If NO clicked, do nothing
+  //   if (!confirmApprove) {
+  //     return;
+  //   }
+
+  //   try {
+  //     await axios.put(`${API}/api/leaves/approve/${id}`, {});
+
+  //     // Remove card only after approval success
+  //     handleRemove(id);
+
+  //     alert("Leave Approved Successfully");
+  //   } catch (err) {
+  //     console.log(err.message);
+  //     alert("Failed to approve leave");
+  //   }
+  // };
+  // ================= APPROVE =================
+  const handleApprove = async (id) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to approve this leave?",
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await api.put(`/api/leaves/approve/${id}`);
       handleRemove(id);
+      alert("Leave Approved Successfully");
     } catch (err) {
       console.log(err.message);
+      alert("Failed to approve leave");
     }
-  }, []);
+  };
 
   // ================= REJECT =================
-  const handleReject = React.useCallback(async (id) => {
+  const handleReject = async (id) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to reject this leave?",
+    );
+
+    if (!confirmed) return;
+
     const reason = prompt("Enter reject reason:");
-    if (!reason) return;
+
+    if (!reason || !reason.trim()) {
+      alert("Reject reason is required.");
+      return;
+    }
 
     try {
-      await api.put(`/api/leaves/reject/${id}`, { reason });
+      await api.put(`/api/leaves/reject/${id}`, {
+        reason: reason.trim(),
+      });
 
       handleRemove(id);
+      alert("Leave Rejected Successfully");
     } catch (err) {
       console.log(err.message);
+      alert("Failed to reject leave");
     }
-  }, []);
+  };
 
   return (
     <div style={styles.page} className="min-h-screen p-4">

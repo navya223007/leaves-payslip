@@ -1,101 +1,307 @@
 import React, { useState } from "react";
+import { FaLock, FaEye, FaEyeSlash, FaKey } from "react-icons/fa";
+
 import api from "../api";
-
 function ChangePassword() {
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [showOld, setShowOld] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
+  const [formData, setFormData] = useState({
+    oldPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
-
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      setError("Please fill in all fields.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError("New passwords do not match.");
-      return;
-    }
 
     try {
-      setLoading(true);
-      const res = await api.post("/api/change-password", {
-        currentPassword,
-        newPassword,
+      const response = await api.put("/api/change-password", {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          currentPassword: formData.oldPassword,
+          newPassword: formData.newPassword,
+          confirmPassword: formData.confirmPassword,
+        }),
       });
-      setSuccess(res.data.message || "Password updated successfully!");
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to update password.");
-    } finally {
-      setLoading(false);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.message);
+        return;
+      }
+
+      alert(data.message);
+
+      setFormData({
+        oldPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong");
     }
   };
 
   return (
-    <div className="container-fluid p-3">
-      <div className="mb-3">
-        <h3 className="fw-bold">Change Password</h3>
-      </div>
+    <>
+      <div className="changePasswordPage">
+        <div className="container-fluid">
+          <div className="row justify-content-center">
+            <div className="col-xl-6 col-lg-7 col-md-9">
+              <div className="changePasswordCard">
+                <div className="cardHeader">
+                  <div className="iconCircle">
+                    <FaKey />
+                  </div>
 
-      <div className="card shadow-sm" style={{ maxWidth: "500px" }}>
-        <div className="card-body">
-          {error && <div className="alert alert-danger">{error}</div>}
-          {success && <div className="alert alert-success">{success}</div>}
+                  <h3>Change Password</h3>
 
-          <form onSubmit={handleSubmit}>
-            <div className="mb-3">
-              <label className="form-label fw-semibold">Current Password</label>
-              <input
-                type="password"
-                className="form-control"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Enter current password"
-                required
-              />
+                  <p>Update your account password securely</p>
+                </div>
+
+                <form onSubmit={handleSubmit}>
+                  {/* OLD PASSWORD */}
+
+                  <div className="mb-4">
+                    <label className="form-label">Current Password</label>
+
+                    <div className="inputGroup">
+                      <FaLock className="inputIcon" />
+
+                      <input
+                        type={showOld ? "text" : "password"}
+                        className="form-control"
+                        name="oldPassword"
+                        placeholder="Enter current password"
+                        value={formData.oldPassword}
+                        onChange={handleChange}
+                        required
+                      />
+
+                      <button
+                        type="button"
+                        className="eyeBtn"
+                        onClick={() => setShowOld(!showOld)}
+                      >
+                        {showOld ? <FaEyeSlash /> : <FaEye />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* NEW PASSWORD */}
+
+                  <div className="mb-4">
+                    <label className="form-label">New Password</label>
+
+                    <div className="inputGroup">
+                      <FaLock className="inputIcon" />
+
+                      <input
+                        type={showNew ? "text" : "password"}
+                        className="form-control"
+                        name="newPassword"
+                        placeholder="Enter new password"
+                        value={formData.newPassword}
+                        onChange={handleChange}
+                        required
+                      />
+
+                      <button
+                        type="button"
+                        className="eyeBtn"
+                        onClick={() => setShowNew(!showNew)}
+                      >
+                        {showNew ? <FaEyeSlash /> : <FaEye />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* CONFIRM PASSWORD */}
+
+                  <div className="mb-4">
+                    <label className="form-label">Confirm Password</label>
+
+                    <div className="inputGroup">
+                      <FaLock className="inputIcon" />
+
+                      <input
+                        type={showConfirm ? "text" : "password"}
+                        className="form-control"
+                        name="confirmPassword"
+                        placeholder="Confirm new password"
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                        required
+                      />
+
+                      <button
+                        type="button"
+                        className="eyeBtn"
+                        onClick={() => setShowConfirm(!showConfirm)}
+                      >
+                        {showConfirm ? <FaEyeSlash /> : <FaEye />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button className="btn saveBtn w-100" type="submit">
+                    Update Password
+                  </button>
+                </form>
+              </div>
             </div>
-
-            <div className="mb-3">
-              <label className="form-label fw-semibold">New Password</label>
-              <input
-                type="password"
-                className="form-control"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password"
-                required
-              />
-            </div>
-
-            <div className="mb-3">
-              <label className="form-label fw-semibold">Confirm New Password</label>
-              <input
-                type="password"
-                className="form-control"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm new password"
-                required
-              />
-            </div>
-
-            <button type="submit" className="btn btn-primary w-100" disabled={loading}>
-              {loading ? "Updating..." : "Update Password"}
-            </button>
-          </form>
+          </div>
         </div>
       </div>
-    </div>
+
+      <style>{`
+      
+      .changePasswordPage{
+        min-height:calc(100vh - 100px);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:20px;
+      }
+
+      .changePasswordCard{
+        background:white;
+        border-radius:24px;
+        padding:35px;
+        box-shadow:0 15px 40px rgba(0,0,0,0.08);
+      }
+
+      .cardHeader{
+        text-align:center;
+        margin-bottom:30px;
+      }
+
+      .iconCircle{
+        width:75px;
+        height:75px;
+        margin:auto;
+        border-radius:50%;
+        background:linear-gradient(
+          135deg,
+          #0d6efd,
+          #6610f2
+        );
+        color:white;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:28px;
+        margin-bottom:15px;
+      }
+
+      .cardHeader h3{
+        font-weight:700;
+        margin-bottom:5px;
+        color:green;
+      }
+
+      .cardHeader p{
+        color:#6c757d;
+        margin:0;
+      }
+
+      .inputGroup{
+        position:relative;
+      }
+
+      .inputIcon{
+        position:absolute;
+        left:15px;
+        top:50%;
+        transform:translateY(-50%);
+        color:#6c757d;
+      }
+
+      .inputGroup .form-control{
+        height:55px;
+        padding-left:45px;
+        padding-right:50px;
+        border-radius:14px;
+      }
+
+      .eyeBtn{
+        position:absolute;
+        right:15px;
+        top:50%;
+        transform:translateY(-50%);
+        border:none;
+        background:none;
+        color:#666;
+      }
+
+      .saveBtn{
+        height:55px;
+        border:none;
+        border-radius:14px;
+        font-weight:600;
+        color:white;
+        background:linear-gradient(
+          135deg,
+          #0d6efd,
+          #6610f2
+        );
+      }
+
+      .saveBtn:hover{
+        transform:translateY(-2px);
+      }
+
+      @media(max-width:768px){
+
+        .changePasswordCard{
+          padding:25px;
+        }
+
+        .iconCircle{
+          width:65px;
+          height:65px;
+          font-size:24px;
+        }
+
+        .cardHeader h3{
+          font-size:22px;
+        }
+
+      }
+
+      @media(max-width:576px){
+
+        .changePasswordCard{
+          padding:20px;
+          border-radius:18px;
+        }
+
+        .inputGroup .form-control{
+          height:50px;
+        }
+
+        .saveBtn{
+          height:50px;
+        }
+
+      }
+
+      `}</style>
+    </>
   );
 }
 

@@ -1,25 +1,27 @@
 import React, { useState } from "react";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext.jsx";
-
+import { useAuth } from "../context/AuthContext";
 import bgImage from "../assets/bgimage/login.jpg";
 
 function Login() {
   const [emp_id, setEmpId] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpEmpId, setOtpEmpId] = useState("");
+  const [showOtp, setShowOtp] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
   const { login } = useAuth();
 
   const handleLogin = async () => {
-    try {
-      if (!emp_id.trim() || !password.trim()) {
-        alert("Please enter Employee ID and Password");
-        return;
-      }
+    if (!emp_id.trim() || !password.trim()) {
+      alert("Please enter Employee ID and Password");
+      return;
+    }
 
+    try {
       setLoading(true);
 
       const res = await api.post("/login", {
@@ -27,26 +29,65 @@ function Login() {
         password: password.trim(),
       });
 
-      const { user } = res.data;
+      console.log("LOGIN RESPONSE:", res.data);
 
-      // 🔥 USE CONTEXT INSTEAD OF LOCALSTORAGE
+      // ADMIN LOGIN
+      if (res.data.otpRequired) {
+        setOtpEmpId(res.data.emp_id);
+        setShowOtp(true);
+
+        alert("OTP sent successfully");
+        return;
+      }
+
+      // EMPLOYEE LOGIN
+      const user = res.data.user;
+
       login(user);
 
-      // 🔥 FIXED NAVIGATION
-      if (user.role === "admin") {
+      if (user.role.toLowerCase() === "admin") {
         navigate("/admin/dashboard", { replace: true });
       } else {
         navigate("/employee", { replace: true });
       }
+    } catch (err) {
+      console.log("Login Error:", err);
 
-    } catch (error) {
-      console.log("Login Error:", error);
-
-      if (error.response) {
-        alert(error.response.data.message || "Login failed");
+      if (err.response) {
+        console.log(err.response.data);
+        alert(err.response.data.message);
       } else {
         alert("Server not responding");
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otp.trim()) {
+      alert("Please enter OTP");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const res = await api.post("/api/admin/verify-otp", {
+        emp_id: otpEmpId,
+        otp: otp.trim(),
+      });
+
+      const { user } = res.data;
+
+      login(user);
+
+      navigate("/admin/dashboard", {
+        replace: true,
+      });
+    } catch (err) {
+      console.log(err);
+      alert(err.response?.data?.message || "Invalid OTP");
     } finally {
       setLoading(false);
     }
@@ -66,7 +107,7 @@ function Login() {
     >
       <div
         style={{
-          width: "350px",
+          width: "360px",
           padding: "30px",
           borderRadius: "15px",
           background: "rgba(255,255,255,0.15)",
@@ -75,9 +116,24 @@ function Login() {
           color: "white",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: "15px" }}>
-          <img src="/ses_logo.ico" alt="Logo" style={{ width: "80px", height: "80px", borderRadius: "50%" }} />
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginBottom: "15px",
+          }}
+        >
+          <img
+            src="/ses_logo.ico"
+            alt="Logo"
+            style={{
+              width: "80px",
+              height: "80px",
+              borderRadius: "50%",
+            }}
+          />
         </div>
+
         <h2 style={{ textAlign: "center", marginBottom: "20px" }}>
           Employee Login
         </h2>
@@ -86,21 +142,52 @@ function Login() {
           type="text"
           placeholder="Employee ID"
           value={emp_id}
+          disabled={showOtp}
           onChange={(e) => setEmpId(e.target.value)}
           style={input}
         />
 
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={input}
-        />
+        {!showOtp && (
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={input}
+          />
+        )}
 
-        <button onClick={handleLogin} style={button} disabled={loading}>
-          {loading ? "Logging in..." : "Login"}
-        </button>
+        {showOtp && (
+          <>
+            <input
+              type="text"
+              placeholder="Enter OTP"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              style={input}
+            />
+
+            <p
+              style={{
+                fontSize: "13px",
+                textAlign: "center",
+                color: "#fff",
+              }}
+            >
+              OTP has been sent to your registered email.
+            </p>
+          </>
+        )}
+
+        {!showOtp ? (
+          <button onClick={handleLogin} style={button} disabled={loading}>
+            {loading ? "Logging in..." : "Login"}
+          </button>
+        ) : (
+          <button onClick={handleVerifyOtp} style={button} disabled={loading}>
+            {loading ? "Verifying..." : "Verify OTP"}
+          </button>
+        )}
       </div>
     </div>
   );
