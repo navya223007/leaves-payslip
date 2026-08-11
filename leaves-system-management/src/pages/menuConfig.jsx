@@ -67,7 +67,7 @@ export const adminMenu = [
 
 export const employeeMenu = [
   {
-    label: "Employe Dashboard",
+    label: "My Dashboard",
     path: "/employee",
     icon: FaTachometerAlt,
   },
@@ -77,7 +77,7 @@ export const employeeMenu = [
     icon: FaClock,
   },
   {
-    label: "My Leaves",
+     label: "My Leaves Reports",
     path: "/employee/employee-reports",
     icon: FaFileAlt,
   },
@@ -86,7 +86,12 @@ export const employeeMenu = [
     path: "/employee/daily-status",
     icon: FaTasks,
   },
-      {
+   {
+    label: "Daily Status Report",
+    path: "/employee/daily-status-report",
+    icon: FaClipboardList,
+  },
+    {
     label: "My Profile",
     path: "/employee/my-details",
     icon: FaIdCard,

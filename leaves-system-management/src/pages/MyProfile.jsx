@@ -66,14 +66,46 @@ function MyProfile() {
     navigate(`/employee/my-details/edit/${emp.emp_id}`);
   };
 
-  const handleDownload = () => {
-    if (!empId) return;
+  // const handleDownload = () => {
+  //   if (!empId) return;
 
-    window.open(
-      `${api.defaults.baseURL}/api/download-employee/${empId}`,
-      "_blank",
+  //   window.open(
+  //     `${api.defaults.baseURL}/api/download-employee/${empId}`,
+  //     "_blank",
+  //   );
+  // };
+
+const handleDownload = async () => {
+  try {
+    const response = await api.get(
+      `/api/download-employee/${empId}`,
+      {
+        responseType: "blob",
+      }
     );
-  };
+
+    const url = window.URL.createObjectURL(response.data);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${empId}.zip`;
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    if (error.response && error.response.data) {
+      const text = await error.response.data.text();
+      const json = JSON.parse(text);
+
+      alert(json.message);
+    } else {
+      alert("Download Failed");
+    }
+  }
+};
 
   return (
     <>

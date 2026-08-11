@@ -29,43 +29,128 @@ function DownloadPayslips() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+// const fetchPayslips = useCallback(async () => {
+//   if (!user?.emp_id) return;
+//   setLoading(true);
+//   setError("");
+//   try {
+//     const [payslipRes, empRes] = await Promise.all([
+//       api.get(`${PAYSLIP_API_URL}/payslips/employee/${user.emp_id}`, {
+//         withCredentials: true  // ✅ Add this
+//       }),
+//       api.get(`${PAYSLIP_API_URL}/employees/${user.emp_id}`, {
+//         withCredentials: true  // ✅ Add this
+//       }),
+//     ]);
+//     setAllPayslips(payslipRes.data || []);
+//     setEmployeeDetails(empRes.data || null);
+//   } catch (err) {
+//     console.error("Error fetching payslips:", err);
+//     setError("Failed to load payslip data.");
+//   } finally {
+//     setLoading(false);
+//   }
+// }, [user]);
+
+// navya
 const fetchPayslips = useCallback(async () => {
   if (!user?.emp_id) return;
+
   setLoading(true);
   setError("");
+
   try {
-    const [payslipRes, empRes] = await Promise.all([
+    const results = await Promise.allSettled([
       api.get(`${PAYSLIP_API_URL}/payslips/employee/${user.emp_id}`, {
-        withCredentials: true  // ✅ Add this
+        withCredentials: true,
       }),
       api.get(`${PAYSLIP_API_URL}/employees/${user.emp_id}`, {
-        withCredentials: true  // ✅ Add this
+        withCredentials: true,
       }),
     ]);
-    setAllPayslips(payslipRes.data || []);
-    setEmployeeDetails(empRes.data || null);
+
+    const payslipResult = results[0];
+    const employeeResult = results[1];
+
+    // ==============================
+    // PAYSLIP API FAILED
+    // ==============================
+    if (payslipResult.status === "rejected") {
+      console.error(
+        "Payslip API Error:",
+        payslipResult.reason
+      );
+
+      setAllPayslips([]);
+      setEmployeeDetails(null);
+      setPayslip(null);
+      setError("Failed to load payslip data.");
+      return;
+    }
+
+    // ==============================
+    // PAYSLIP API SUCCESS
+    // ==============================
+    const payslipData = payslipResult.value.data || [];
+
+    setAllPayslips(payslipData);
+
+    // ==============================
+    // EMPLOYEE API
+    // ==============================
+    if (employeeResult.status === "fulfilled") {
+      setEmployeeDetails(employeeResult.value.data || null);
+    } else {
+      console.error(
+        "Employee API Error:",
+        employeeResult.reason
+      );
+
+      setEmployeeDetails(null);
+    }
+
   } catch (err) {
-    console.error("Error fetching payslips:", err);
+    console.error("Unexpected error fetching payslip:", err);
+
+    setAllPayslips([]);
+    setEmployeeDetails(null);
+    setPayslip(null);
     setError("Failed to load payslip data.");
   } finally {
     setLoading(false);
   }
 }, [user]);
-
+// navya
   useEffect(() => { fetchPayslips(); }, [fetchPayslips]);
 
-  useEffect(() => {
-    if (allPayslips.length > 0) {
-      const found = allPayslips.find(
-        (p) => parseInt(p.salary_month) === parseInt(month) && parseInt(p.salary_year) === parseInt(year)
-      );
-      setPayslip(found || null);
-    } else {
-      setPayslip(null);
-    }
-  }, [month, year, allPayslips]);
+  // useEffect(() => {
+  //   if (allPayslips.length > 0) {
+  //     const found = allPayslips.find(
+  //       (p) => parseInt(p.salary_month) === parseInt(month) && parseInt(p.salary_year) === parseInt(year)
+  //     );
+  //     setPayslip(found || null);
+  //   } else {
+  //     setPayslip(null);
+  //   }
+  // }, [month, year, allPayslips]);
 
   // Build viewData in same shape as admin's handleViewPayslip, then navigate to employee payslip view
+  
+  // navya
+  useEffect(() => {
+  if (allPayslips.length > 0) {
+    const found = allPayslips.find(
+      (p) =>
+        parseInt(p.salary_month) === parseInt(month) &&
+        parseInt(p.salary_year) === parseInt(year)
+    );
+
+    setPayslip(found || null);
+  } else {
+    setPayslip(null);
+  }
+}, [month, year, allPayslips]);
+// navya
   const handleView = () => {
     if (!payslip || !employeeDetails) return;
     const viewData = {

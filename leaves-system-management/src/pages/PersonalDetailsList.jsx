@@ -123,30 +123,37 @@ function PersonalDetailsList() {
     }
   };
 
-  const handleDownload = async (emp) => {
-    try {
-      const response = await api.get(`/api/download-employee/${emp.emp_id}`, {
+const handleDownload = async (emp) => {
+  try {
+    const response = await api.get(
+      `/api/download-employee/${emp.emp_id}`,
+      {
         responseType: "blob",
-      });
+      }
+    );
 
-      const url = window.URL.createObjectURL(response.data);
+    const url = window.URL.createObjectURL(response.data);
 
-      const a = document.createElement("a");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${emp.emp_id}.zip`;
 
-      a.href = url;
-      a.download = `${emp.emp_id}.zip`;
+    document.body.appendChild(a);
+    a.click();
 
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    if (error.response && error.response.data) {
+      const text = await error.response.data.text();
+      const json = JSON.parse(text);
 
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Download Error:", error);
-      alert(error.response?.data?.message || "Error downloading file");
+      alert(json.message);
+    } else {
+      alert("Download failed");
     }
-  };
-
+  }
+};
   // // EXPORT ALL
   // const handleExportAll = () => {
   //   window.open(
@@ -156,12 +163,46 @@ function PersonalDetailsList() {
   // };
 
   // DOWNLOAD ALL FILES
-  const handleDownloadAllFiles = () => {
-    window.open(
-      `${api.defaults.baseURL}/api/download-all-personal-files`,
-      "_blank",
-    );
-  };
+// DOWNLOAD ALL FILES
+const handleDownloadAllFiles = async () => {
+  try {
+    const response = await api.get("/api/download-all-personal-files", {
+      responseType: "blob",
+      validateStatus: () => true,
+    });
+
+    console.log("Status:", response.status);
+    console.log("Content-Type:", response.headers["content-type"]);
+
+    // Backend returned JSON (error message)
+    if (
+      response.headers["content-type"] &&
+      response.headers["content-type"].includes("application/json")
+    ) {
+      const text = await response.data.text();
+      const json = JSON.parse(text);
+
+      alert(json.message);
+      return;
+    }
+
+    // ZIP download
+    const url = window.URL.createObjectURL(response.data);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "All_Employee_Files.zip";
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.log(error);
+    alert("Download Failed");
+  }
+};
 
   return (
     <>

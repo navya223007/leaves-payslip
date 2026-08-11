@@ -5,15 +5,24 @@ const mysql = require("mysql2");
 // const cors = require("cors"); // Removed unused package
 const jwt = require("jsonwebtoken");
 const path = require("path");
-const cookieParser = require("cookie-parser");
-const axios = require('axios');
-
-// navya
 const fs = require("fs");
 const multer = require("multer");
+
+const cookieParser = require("cookie-parser");
+const axios = require("axios");
 const nodemailer = require("nodemailer");
 const cron = require("node-cron");
 const archiver = require("archiver");
+
+console.log("archiver =", archiver);
+console.log("typeof =", typeof archiver);
+
+try {
+  const a = archiver("zip");
+  console.log("  TEST OK");
+} catch (e) {
+  console.log("  TEST FAILED:", e);
+}
 // navya
 console.log("========================================");
 console.log("🚀 STARTING SERVER VERSION 5.0 🚀");
@@ -131,37 +140,69 @@ const verifyToken = (req, res, next) => {
 
 // ================= ADMIN OTP MAIL =================
 const ADMIN_EMAILS = {
-  ADMIN001: "bodasunavya24@gmail.com",
-  // ADMIN002: "admin2@gmail.com",
+  // ADMIN001: "bodasunavya24@gmail.com",
+    // ADMIN001: "softelectronicsolutions@gmail.com",
+     ADMIN001: "softelectronics.pvtltd@gmail.com",
+
+  ADMIN002: "bodasunavya24@gmail.com",
   // ADMIN003: "admin3@gmail.com",
 };
 
-// Create Verify OTP API
 const otpStore = new Map();
+
+
+// ===========================
+// LOGIN API
+// ===========================
 app.post("/login", async (req, res) => {
   try {
-    console.log("🔑 Login Attempt:", req.body);
+    const loginStart = Date.now();
+
+    console.log("🔑 Login Attempt:", {
+      emp_id: req.body.emp_id,
+    });
 
     const { emp_id, password } = req.body;
 
+    // ===========================
+    // VALIDATION
+    // ===========================
     if (!emp_id || !password) {
       return res.status(400).json({
         message: "Employee ID and Password are required",
       });
     }
 
+    const loginId = emp_id.trim();
+    const loginPassword = password.trim();
+
+    // ===========================
+    // GET USER FROM DATABASE
+    // ===========================
     db.query(
       "SELECT * FROM users WHERE LOWER(emp_id)=LOWER(?) OR LOWER(email)=LOWER(?)",
-      [emp_id.trim(), emp_id.trim()],
+      [loginId, loginId],
       async (err, result) => {
+        console.log(
+          "⏱️ DB query completed:",
+          Date.now() - loginStart,
+          "ms"
+        );
+
         if (err) {
-          console.log(err);
+          console.error("❌ DB Error:", err);
+
           return res.status(500).json({
             message: "Database error",
           });
         }
 
-        if (result.length === 0) {
+        console.log("👤 DB Result:", result);
+
+        // ===========================
+        // USER NOT FOUND
+        // ===========================
+        if (!result || result.length === 0) {
           return res.status(401).json({
             message: "Invalid Employee ID or Password",
           });
@@ -169,81 +210,174 @@ app.post("/login", async (req, res) => {
 
         const user = result[0];
 
-        if (user.password.trim() !== password.trim()) {
+        // ===========================
+        // PASSWORD CHECK
+        // ===========================
+        if (
+          !user.password ||
+          user.password.trim() !== loginPassword
+        ) {
           return res.status(401).json({
             message: "Invalid Employee ID or Password",
           });
         }
 
-        // ===========================
-        // ADMIN LOGIN (OTP REQUIRED)
-        // ===========================
+        // =====================================================
+        // ADMIN LOGIN - OTP REQUIRED
+        // =====================================================
+        if (
+          String(user.role).trim().toLowerCase() === "admin"
+        ) {
+          console.log("👨‍💼 Admin login detected");
 
-        if (String(user.role).trim().toLowerCase() === "admin") {
-          const otp = Math.floor(100000 + Math.random() * 900000).toString();
+          // ===========================
+          // GENERATE OTP
+          // ===========================
+          const otp = Math.floor(
+            100000 + Math.random() * 900000
+          ).toString();
 
+          // ===========================
+          // STORE OTP
+          // ===========================
           otpStore.set(user.emp_id, {
-            otp,
+            otp: otp,
             expires: Date.now() + 5 * 60 * 1000,
           });
 
-          // Get email from object
+          console.log("🔐 OTP generated for:", user.emp_id);
+
+          // ===========================
+          // GET ADMIN EMAIL
+          // ===========================
           const adminEmail = ADMIN_EMAILS[user.emp_id];
 
           if (!adminEmail) {
+            console.error(
+              "❌ Admin email not configured for:",
+              user.emp_id
+            );
+
             return res.status(400).json({
               message: "Admin email not configured",
             });
           }
 
-          try {
-            await transporter.sendMail({
+          console.log(
+            "📧 OTP email will be sent to:",
+            adminEmail
+          );
+
+          // =====================================================
+          // SEND OTP EMAIL IN BACKGROUND
+          // =====================================================
+          transporter
+            .sendMail({
               from: process.env.MAIL_USER,
               to: adminEmail,
               subject: "Admin Login OTP",
               html: `
-        <h2>Admin Login OTP</h2>
+                <div style="font-family: Arial, sans-serif;">
+                  
+                  <h2>Admin Login OTP</h2>
 
-        <p>Hello <b>${user.name}</b>,</p>
+                  <p>Hello <b>${user.name}</b>,</p>
 
-        <h1>${otp}</h1>
+                  <p>Your OTP for Admin Login is:</p>
 
-        <p>This OTP is valid for <b>5 minutes</b>.</p>
+                  <h1
+                    style="
+                      font-size: 32px;
+                      letter-spacing: 5px;
+                      margin: 20px 0;
+                    "
+                  >
+                    ${otp}
+                  </h1>
 
-        <p>Please do not share this OTP.</p>
-      `,
+                  <p>
+                    This OTP is valid for
+                    <b>5 minutes</b>.
+                  </p>
+
+                  <p>
+                    Please do not share this OTP with anyone.
+                  </p>
+
+                  <p>
+                    If you did not request this login,
+                    please ignore this email.
+                  </p>
+
+                </div>
+              `,
+            })
+            .then(() => {
+              console.log(
+                "✅ OTP email sent successfully to:",
+                adminEmail
+              );
+
+              console.log(
+                "📧 Email sending time:",
+                Date.now() - loginStart,
+                "ms"
+              );
+            })
+            .catch((mailErr) => {
+              console.error(
+                "❌ OTP email failed:",
+                mailErr.message
+              );
+
+              // Remove OTP if email failed
+              otpStore.delete(user.emp_id);
+
+              console.error(
+                "🗑️ OTP removed because email failed"
+              );
             });
-            console.log("Returning OTP response");
-            return res.json({
-              otpRequired: true,
-              emp_id: user.emp_id,
-              message: "OTP sent successfully",
-            });
-          } catch (mailErr) {
-            console.log(mailErr);
 
-            return res.status(500).json({
-              message: "Failed to send OTP",
-            });
-          }
+          // =====================================================
+          // RESPOND IMMEDIATELY
+          // =====================================================
+
+          console.log(
+            "🚀 Returning OTP response:",
+            Date.now() - loginStart,
+            "ms"
+          );
+
+          return res.json({
+            otpRequired: true,
+            emp_id: user.emp_id,
+            message: "OTP sent successfully",
+          });
         }
 
-        // ===========================
+        // =====================================================
         // EMPLOYEE LOGIN
-        // ===========================
+        // =====================================================
+
+        console.log("👤 Employee login detected");
 
         const token = jwt.sign(
           {
             id: user.id,
-            role: String(user.role).trim().toLowerCase(),
+            role: String(user.role)
+              .trim()
+              .toLowerCase(),
             emp_id: user.emp_id,
           },
           SECRET_KEY,
           {
             expiresIn: "1d",
-          },
+          }
         );
 
+        // ===========================
+        // SET COOKIE
+        // ===========================
         res.cookie("token", token, {
           httpOnly: true,
           secure: false,
@@ -252,24 +386,38 @@ app.post("/login", async (req, res) => {
           maxAge: 24 * 60 * 60 * 1000,
         });
 
+        console.log(
+          "✅ Employee login successful:",
+          Date.now() - loginStart,
+          "ms"
+        );
+
+        // ===========================
+        // EMPLOYEE RESPONSE
+        // ===========================
         return res.json({
           message: "Login successful",
           user: {
             id: user.id,
             name: user.name,
             emp_id: user.emp_id,
-            role: String(user.role).trim().toLowerCase(),
+            role: String(user.role)
+              .trim()
+              .toLowerCase(),
             department: user.department,
           },
         });
-      },
+      }
     );
   } catch (error) {
-    console.log(error);
+    console.error("❌ LOGIN ERROR:", error);
 
-    res.status(500).json({
-      message: "Server Error",
-    });
+    if (!res.headersSent) {
+      return res.status(500).json({
+        message: "Server Error",
+        error: error.message,
+      });
+    }
   }
 });
 
@@ -942,21 +1090,35 @@ app.get("/api/leaves/report", verifyToken, (req, res) => {
 });
 
 // 10:00 AM - Tomorrow Morning Reminder
-cron.schedule("0 10 * * *", async () => {
+cron.schedule("0 11 * * *", async () => {
   console.log("Running Tomorrow Morning Reminder");
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const leaveDate = tomorrow.toISOString().split("T")[0];
+
+  const leaveDate =
+    tomorrow.getFullYear() +
+    "-" +
+    String(tomorrow.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(tomorrow.getDate()).padStart(2, "0");
+
+  console.log("Tomorrow Date:", leaveDate);
 
   db.query(
     `SELECT * FROM leaves
      WHERE date=?
+     AND status='approved'
      AND is_emergency=0
      AND reminder_morning_sent=0`,
     [leaveDate],
     async (err, rows) => {
-      if (err) return console.log(err);
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      console.log("Rows Found:", rows.length);
 
       for (const leave of rows) {
         try {
@@ -991,44 +1153,59 @@ cron.schedule("0 10 * * *", async () => {
   );
 });
 //  2:00 PM - Tomorrow Afternoon Reminder
-cron.schedule("0 14 * * *", async () => {
-  console.log("Running Tomorrow Afternoon Reminder");
+cron.schedule("0 15 * * *", async () => {
+  console.log("Running Tomorrow Morning Reminder");
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const leaveDate = tomorrow.toISOString().split("T")[0];
+
+  const leaveDate =
+    tomorrow.getFullYear() +
+    "-" +
+    String(tomorrow.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(tomorrow.getDate()).padStart(2, "0");
+
+  console.log("Tomorrow Date:", leaveDate);
 
   db.query(
     `SELECT * FROM leaves
      WHERE date=?
+     AND status='approved'
      AND is_emergency=0
-     AND reminder_afternoon_sent=0`,
+     AND reminder_morning_sent=0`,
     [leaveDate],
     async (err, rows) => {
-      if (err) return console.log(err);
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      console.log("Rows Found:", rows.length);
 
       for (const leave of rows) {
         try {
           await transporter.sendMail({
             from: process.env.MAIL_USER,
             to: process.env.OFFICE_MAIL,
-            subject: `🌤 Afternoon Reminder - ${leave.name} Leave Tomorrow`,
+            subject: `🌞 Morning Reminder - ${leave.name} Leave Tomorrow`,
             html: `
-              <h2>Afternoon Reminder</h2>
-
-              <p><b>${leave.name}</b> will be on leave tomorrow.</p>
+              <h2>Morning Reminder</h2>
+              <p><b>${leave.name}</b> (${leave.emp_id}) will be on leave tomorrow.</p>
 
               <table border="1" cellpadding="8">
                 <tr><td>Name</td><td>${leave.name}</td></tr>
                 <tr><td>Department</td><td>${leave.department}</td></tr>
                 <tr><td>Leave Date</td><td>${leave.date}</td></tr>
+                <tr><td>Leave Type</td><td>${leave.leave_type}</td></tr>
+                <tr><td>Session</td><td>${leave.session || "-"}</td></tr>
                 <tr><td>Reason</td><td>${leave.reason_text || leave.reason_type}</td></tr>
               </table>
             `,
           });
 
           db.query(
-            "UPDATE leaves SET reminder_afternoon_sent=1 WHERE id=?",
+            "UPDATE leaves SET reminder_morning_sent=1 WHERE id=?",
             [leave.id]
           );
         } catch (e) {
@@ -1041,43 +1218,58 @@ cron.schedule("0 14 * * *", async () => {
 
 // 6:00 PM - Tomorrow Evening Reminder
 cron.schedule("0 18 * * *", async () => {
-  console.log("Running Tomorrow Evening Reminder");
+  console.log("Running Tomorrow Morning Reminder");
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const leaveDate = tomorrow.toISOString().split("T")[0];
+
+  const leaveDate =
+    tomorrow.getFullYear() +
+    "-" +
+    String(tomorrow.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(tomorrow.getDate()).padStart(2, "0");
+
+  console.log("Tomorrow Date:", leaveDate);
 
   db.query(
     `SELECT * FROM leaves
      WHERE date=?
+     AND status='approved'
      AND is_emergency=0
-     AND reminder_night_sent=0`,
+     AND reminder_morning_sent=0`,
     [leaveDate],
     async (err, rows) => {
-      if (err) return console.log(err);
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      console.log("Rows Found:", rows.length);
 
       for (const leave of rows) {
         try {
           await transporter.sendMail({
             from: process.env.MAIL_USER,
             to: process.env.OFFICE_MAIL,
-            subject: `🌙 Evening Reminder - ${leave.name} Leave Tomorrow`,
+            subject: `🌞 Morning Reminder - ${leave.name} Leave Tomorrow`,
             html: `
-              <h2>Evening Reminder</h2>
-
-              <p><b>${leave.name}</b> is on leave tomorrow.</p>
+              <h2>Morning Reminder</h2>
+              <p><b>${leave.name}</b> (${leave.emp_id}) will be on leave tomorrow.</p>
 
               <table border="1" cellpadding="8">
                 <tr><td>Name</td><td>${leave.name}</td></tr>
                 <tr><td>Department</td><td>${leave.department}</td></tr>
                 <tr><td>Leave Date</td><td>${leave.date}</td></tr>
+                <tr><td>Leave Type</td><td>${leave.leave_type}</td></tr>
+                <tr><td>Session</td><td>${leave.session || "-"}</td></tr>
                 <tr><td>Reason</td><td>${leave.reason_text || leave.reason_type}</td></tr>
               </table>
             `,
           });
 
           db.query(
-            "UPDATE leaves SET reminder_night_sent=1 WHERE id=?",
+            "UPDATE leaves SET reminder_morning_sent=1 WHERE id=?",
             [leave.id]
           );
         } catch (e) {
@@ -1091,16 +1283,31 @@ cron.schedule("0 18 * * *", async () => {
 cron.schedule("0 9 * * *", async () => {
   console.log("Running Leave Day Reminder");
 
-  const today = new Date().toISOString().split("T")[0];
+  const now = new Date();
+
+  const today =
+    now.getFullYear() +
+    "-" +
+    String(now.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(now.getDate()).padStart(2, "0");
+
+  console.log("Today:", today);
 
   db.query(
     `SELECT * FROM leaves
      WHERE date=?
+     AND status='approved'
      AND is_emergency=0
      AND reminder_leaveday_sent=0`,
     [today],
     async (err, rows) => {
-      if (err) return console.log(err);
+      if (err) {
+        console.log(err);
+        return;
+      }
+
+      console.log("Rows Found:", rows.length);
 
       for (const leave of rows) {
         try {
@@ -1116,6 +1323,7 @@ cron.schedule("0 9 * * *", async () => {
               <table border="1" cellpadding="8">
                 <tr><td>Name</td><td>${leave.name}</td></tr>
                 <tr><td>Department</td><td>${leave.department}</td></tr>
+                <tr><td>Leave Date</td><td>${leave.date}</td></tr>
                 <tr><td>Leave Type</td><td>${leave.leave_type}</td></tr>
                 <tr><td>Session</td><td>${leave.session || "-"}</td></tr>
                 <tr><td>Reason</td><td>${leave.reason_text || leave.reason_type}</td></tr>
@@ -1125,10 +1333,19 @@ cron.schedule("0 9 * * *", async () => {
 
           db.query(
             "UPDATE leaves SET reminder_leaveday_sent=1 WHERE id=?",
-            [leave.id]
+            [leave.id],
+            (err) => {
+              if (err) {
+                console.log(err);
+              } else {
+                console.log(
+                  `Leave Day Reminder Sent for ${leave.name}`
+                );
+              }
+            }
           );
         } catch (e) {
-          console.log(e);
+          console.log("Mail Error:", e);
         }
       }
     }
@@ -1970,11 +2187,11 @@ app.get("/api/download-employee/:emp_id", (req, res) => {
       return res.status(500).json(err);
     }
 
-    if (result.length === 0) {
-      return res.status(404).json({
-        message: "Employee not found",
-      });
-    }
+   if (result.length === 0) {
+  return res.status(404).json({
+    message: "No Employee Data Found",
+  });
+}
 
     const emp = result[0];
 
@@ -2071,8 +2288,9 @@ NEXT APPRAISAL : ${emp.next_appraisal_date}
     }
   });
 });
+
 // ======================================================
-// DOWNLOAD ALL EMPLOYEE
+// DOWNLOAD ALL EMPLOYEE FILES
 // ======================================================
 
 app.get("/api/download-all-personal-files", (req, res) => {
@@ -2083,33 +2301,55 @@ app.get("/api/download-all-personal-files", (req, res) => {
 
   db.query(sql, (err, results) => {
     if (err) {
-      console.log(err);
-      return res.status(500).json(err);
+      console.log("DB ERROR:", err);
+      return res.status(500).json({
+        message: "Database Error",
+      });
     }
 
-    // ZIP NAME
-    res.attachment("all-employees-files.zip");
+    // No employees found
+    if (results.length === 0) {
+      return res.status(404).json({
+        message: "No Employee Data Found",
+      });
+    }
 
-    // CREATE ZIP
+    // Check whether at least one file exists
+    const hasFiles = results.some(
+      (emp) => emp.aadhaar_file || emp.pan_file || emp.bank_file
+    );
+
+    if (!hasFiles) {
+      return res.status(404).json({
+        message: "No Employee Files Found",
+      });
+    }
+
+    // ZIP name
+    res.attachment("All_Employee_Files.zip");
+
+    // Create ZIP
     const archive = archiver("zip", {
       zlib: { level: 9 },
     });
 
-    // ERROR
     archive.on("error", (err) => {
-      throw err;
+      console.log("ARCHIVE ERROR:", err);
+
+      if (!res.headersSent) {
+        return res.status(500).json({
+          message: "ZIP creation failed",
+        });
+      }
     });
 
-    // SEND ZIP
     archive.pipe(res);
 
-    // LOOP ALL EMPLOYEES
+    // Loop all employees
     results.forEach((emp) => {
-      // FOLDER NAME
-      const folderName = `${emp.emp_id}`;
+      const folderName = emp.emp_id || "Employee";
 
-      // ================= TEXT FILE =================
-
+      // Employee details text file
       const details = `
 EMPLOYEE DETAILS
 
@@ -2133,14 +2373,13 @@ NEXT APPRAISAL : ${emp.next_appraisal_date}
         name: `${folderName}/employee-details.txt`,
       });
 
-      // ================= AADHAAR FILE =================
-
+      // Aadhaar File
       if (emp.aadhaar_file) {
         const aadhaarPath = path.join(
           __dirname,
           "uploads",
           "aadhaar",
-          emp.aadhaar_file,
+          emp.aadhaar_file
         );
 
         if (fs.existsSync(aadhaarPath)) {
@@ -2150,10 +2389,14 @@ NEXT APPRAISAL : ${emp.next_appraisal_date}
         }
       }
 
-      // ================= PAN FILE =================
-
+      // PAN File
       if (emp.pan_file) {
-        const panPath = path.join(__dirname, "uploads", "pan", emp.pan_file);
+        const panPath = path.join(
+          __dirname,
+          "uploads",
+          "pan",
+          emp.pan_file
+        );
 
         if (fs.existsSync(panPath)) {
           archive.file(panPath, {
@@ -2162,10 +2405,14 @@ NEXT APPRAISAL : ${emp.next_appraisal_date}
         }
       }
 
-      // ================= BANK FILE =================
-
+      // Bank File
       if (emp.bank_file) {
-        const bankPath = path.join(__dirname, "uploads", "bank", emp.bank_file);
+        const bankPath = path.join(
+          __dirname,
+          "uploads",
+          "bank",
+          emp.bank_file
+        );
 
         if (fs.existsSync(bankPath)) {
           archive.file(bankPath, {
@@ -2175,7 +2422,6 @@ NEXT APPRAISAL : ${emp.next_appraisal_date}
       }
     });
 
-    // FINALIZE
     archive.finalize();
   });
 });
