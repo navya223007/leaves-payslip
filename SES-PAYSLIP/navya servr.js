@@ -136,7 +136,7 @@ const createTables = () => {
             performance_bonus DECIMAL(10,2) DEFAULT 0,
             arrears DECIMAL(10,2) DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (emp_id) REFERENCES employee(emp_id) ON DELETE CASCADE ON UPDATE CASCADE,
+            FOREIGN KEY (emp_id) REFERENCES employee(emp_id) ON DELETE CASCADE,
             UNIQUE KEY unique_employee_month_year (emp_id, salary_month, salary_year)
         )
     `;
@@ -467,16 +467,11 @@ app.post("/api/employees", (req, res) => {
 
 // Update employee
 app.put("/api/employees/:emp_id", (req, res) => {
-  // The URL identifies the existing employee; the request body contains the new ID.
-  const oldEmpId = req.params.emp_id;
-  const newEmpId = String(req.body.emp_id || oldEmpId).trim();
-  const updates = { ...req.body };
+  const { emp_id } = req.params;
+  const updates = req.body;
 
+  // Remove emp_id from updates if it exists
   delete updates.emp_id;
-
-  if (!newEmpId) {
-    return res.status(400).json({ error: "Employee ID is required" });
-  }
 
   // Handle date of joining specially if it's being updated
   if (updates.date_of_joining) {
@@ -491,8 +486,8 @@ app.put("/api/employees/:emp_id", (req, res) => {
   }
 
   // Build dynamic update query
-  const fields = ["emp_id = ?"];
-  const values = [newEmpId];
+  const fields = [];
+  const values = [];
 
   // List of allowed fields to update
   const allowedFields = [
@@ -523,21 +518,16 @@ app.put("/api/employees/:emp_id", (req, res) => {
     }
   });
 
-  values.push(oldEmpId);
+  if (fields.length === 0) {
+    return res.status(400).json({ error: "No valid fields to update" });
+  }
+
+  values.push(emp_id);
   const query = `UPDATE employee SET ${fields.join(", ")} WHERE emp_id = ?`;
 
   db.query(query, values, (err, result) => {
     if (err) {
       console.error("Error updating employee:", err);
-      if (err.code === "ER_DUP_ENTRY") {
-        return res.status(409).json({ error: "Employee ID already exists" });
-      }
-      if (err.code === "ER_ROW_IS_REFERENCED_2") {
-        return res.status(409).json({
-          error:
-            "Employee ID cannot be changed because the payslip database relation is not configured for updates.",
-        });
-      }
       return res.status(500).json({ error: "Database error: " + err.message });
     }
     if (result.affectedRows === 0) {
@@ -974,163 +964,10 @@ app.post("/api/payslips/save", (req, res) => {
 });
 
 // Update payslip
-// app.put("/api/payslips/:id", (req, res) => {
-//   const { id } = req.params;
-//   console.log("Received update request for payslip ID:", id);
-//   console.log("Update data:", req.body);
-
-//   const {
-//     emp_id,
-//     salary_month,
-//     salary_year,
-//     advance_salary,
-//     paid_days,
-//     holidays,
-//     leaves,
-//     gross_salary,
-//     pf_deduction,
-//     professional_tax_deduction,
-//     performance_bonus,
-//     arrears,
-//     total_deductions,
-//     net_salary,
-//   } = req.body;
-
-//   // Validate input
-//   if (!emp_id || !salary_month || !salary_year || !paid_days) {
-//     console.log("Missing required fields:", {
-//       emp_id,
-//       salary_month,
-//       salary_year,
-//       paid_days,
-//     });
-//     return res.status(400).json({ error: "Required fields are missing" });
-//   }
-
-//   // Parse and validate numeric values
-//   const parsedGrossSalary = parseFloat(gross_salary) || 0;
-//   const parsedPfDeduction = parseFloat(pf_deduction) || 0;
-//   const parsedProfessionalTax = parseFloat(professional_tax_deduction) || 0;
-//   const parsedAdvanceSalary = parseFloat(advance_salary) || 0;
-//   const parsedPerformanceBonus = parseFloat(performance_bonus) || 0;
-//   const parsedArrears = parseFloat(arrears) || 0;
-//   const parsedTotalDeductions = parseFloat(total_deductions) || 0;
-//   const parsedNetSalary = parseFloat(net_salary) || 0;
-
-//   // Validate range (max 999,999,999.99)
-//   if (parsedGrossSalary > 999999999.99) {
-//     return res
-//       .status(400)
-//       .json({ error: "Gross salary exceeds maximum allowed value" });
-//   }
-//   if (parsedNetSalary > 999999999.99) {
-//     return res
-//       .status(400)
-//       .json({ error: "Net salary exceeds maximum allowed value" });
-//   }
-
-//   const updateQuery = `
-//         UPDATE payslip
-//         SET
-//             emp_id = ?,
-//             salary_month = ?,
-//             salary_year = ?,
-//             advance_salary = ?,
-//             paid_days = ?,
-//             holidays = ?,
-//             leaves = ?,
-//             gross_salary = ?,
-//             pf_deduction = ?,
-//             professional_tax_deduction = ?,
-//             performance_bonus = ?,
-//             arrears = ?,
-//             total_deductions = ?,
-//             net_salary = ?
-//         WHERE id = ?
-//     `;
-
-//   const values = [
-//     emp_id,
-//     parseInt(salary_month),
-//     parseInt(salary_year),
-//     parsedAdvanceSalary.toFixed(2),
-//     parseInt(paid_days),
-//     parseInt(holidays) || 0,
-//     parseInt(leaves) || 0,
-//     parsedGrossSalary.toFixed(2),
-//     parsedPfDeduction.toFixed(2),
-//     parsedProfessionalTax.toFixed(2),
-//     parsedPerformanceBonus.toFixed(2),
-//     parsedArrears.toFixed(2),
-//     parsedTotalDeductions.toFixed(2),
-//     parsedNetSalary.toFixed(2),
-//     id,
-//   ];
-
-//   console.log("Executing update query with values:", values);
-
-//   db.query(updateQuery, values, (err, result) => {
-//     if (err) {
-//       console.error("Error updating payslip:", err);
-
-//       // Handle specific MySQL errors
-//       if (
-//         err.code === "ER_DATA_TOO_LONG" ||
-//         err.code === "ER_TRUNCATED_WRONG_VALUE"
-//       ) {
-//         return res.status(400).json({
-//           error: "Salary value out of range. Please check the amounts.",
-//         });
-//       }
-//       if (err.code === "ER_BAD_NULL_ERROR") {
-//         return res.status(400).json({
-//           error: "Required field cannot be null",
-//         });
-//       }
-
-//       return res.status(500).json({ error: "Database error: " + err.message });
-//     }
-
-//     if (result.affectedRows === 0) {
-//       return res.status(404).json({ error: "Payslip not found" });
-//     }
-
-//     console.log(
-//       "Payslip updated successfully, affected rows:",
-//       result.affectedRows,
-//     );
-
-//     // Get the updated payslip with employee details
-//     const selectQuery = `
-//             SELECT p.*, e.name, e.designation, e.bank_account_number, e.IFSC_code, e.bank_name, e.PAN, e.pf_applicable
-//             FROM payslip p
-//             JOIN employee e ON p.emp_id = e.emp_id
-//             WHERE p.id = ?
-//         `;
-
-//     db.query(selectQuery, [id], (err, results) => {
-//       if (err) {
-//         console.error("Error fetching updated payslip:", err);
-//         return res.json({ message: "Payslip updated successfully" });
-//       }
-//       console.log("Returning updated payslip:", results[0]);
-//       res.json({
-//         message: "Payslip updated successfully",
-//         payslip: results[0],
-//       });
-//     });
-//   });
-// });
-
-// ==================== UPDATE PAYSLIP ====================
-
 app.put("/api/payslips/:id", (req, res) => {
   const { id } = req.params;
-
-  console.log("====================================");
-  console.log("UPDATE PAYSLIP REQUEST");
-  console.log("Payslip ID:", id);
-  console.log("Request body:", req.body);
+  console.log("Received update request for payslip ID:", id);
+  console.log("Update data:", req.body);
 
   const {
     emp_id,
@@ -1149,308 +986,127 @@ app.put("/api/payslips/:id", (req, res) => {
     net_salary,
   } = req.body;
 
-  // --------------------------------------------------
-  // 1. Validate required fields
-  // --------------------------------------------------
-
-  if (
-    !emp_id ||
-    salary_month === undefined ||
-    salary_year === undefined ||
-    paid_days === undefined
-  ) {
-    return res.status(400).json({
-      error: "Employee ID, month, year and paid days are required",
+  // Validate input
+  if (!emp_id || !salary_month || !salary_year || !paid_days) {
+    console.log("Missing required fields:", {
+      emp_id,
+      salary_month,
+      salary_year,
+      paid_days,
     });
+    return res.status(400).json({ error: "Required fields are missing" });
   }
 
-  // --------------------------------------------------
-  // 2. Check whether payslip exists
-  // --------------------------------------------------
+  // Parse and validate numeric values
+  const parsedGrossSalary = parseFloat(gross_salary) || 0;
+  const parsedPfDeduction = parseFloat(pf_deduction) || 0;
+  const parsedProfessionalTax = parseFloat(professional_tax_deduction) || 0;
+  const parsedAdvanceSalary = parseFloat(advance_salary) || 0;
+  const parsedPerformanceBonus = parseFloat(performance_bonus) || 0;
+  const parsedArrears = parseFloat(arrears) || 0;
+  const parsedTotalDeductions = parseFloat(total_deductions) || 0;
+  const parsedNetSalary = parseFloat(net_salary) || 0;
 
-  const checkPayslipQuery = `
-    SELECT id, emp_id
-    FROM payslip
-    WHERE id = ?
-  `;
+  // Validate range (max 999,999,999.99)
+  if (parsedGrossSalary > 999999999.99) {
+    return res
+      .status(400)
+      .json({ error: "Gross salary exceeds maximum allowed value" });
+  }
+  if (parsedNetSalary > 999999999.99) {
+    return res
+      .status(400)
+      .json({ error: "Net salary exceeds maximum allowed value" });
+  }
 
-  db.query(checkPayslipQuery, [id], (err, payslipResults) => {
-    if (err) {
-      console.error("Error checking payslip:", err);
-
-      return res.status(500).json({
-        error: "Database error while checking payslip",
-      });
-    }
-
-    if (payslipResults.length === 0) {
-      return res.status(404).json({
-        error: "Payslip not found",
-      });
-    }
-
-    // --------------------------------------------------
-    // 3. Check whether employee ID exists
-    // --------------------------------------------------
-
-    const checkEmployeeQuery = `
-      SELECT
-        emp_id,
-        name,
-        designation,
-        PAN,
-        bank_account_number,
-        IFSC_code,
-        bank_name,
-        pf_applicable
-      FROM employee
-      WHERE emp_id = ?
+  const updateQuery = `
+        UPDATE payslip 
+        SET 
+            emp_id = ?,
+            salary_month = ?,
+            salary_year = ?,
+            advance_salary = ?,
+            paid_days = ?,
+            holidays = ?,
+            leaves = ?,
+            gross_salary = ?,
+            pf_deduction = ?,
+            professional_tax_deduction = ?,
+            performance_bonus = ?,
+            arrears = ?,
+            total_deductions = ?,
+            net_salary = ?
+        WHERE id = ?
     `;
 
-    db.query(checkEmployeeQuery, [emp_id], (err, employeeResults) => {
-      if (err) {
-        console.error("Error checking employee:", err);
+  const values = [
+    emp_id,
+    parseInt(salary_month),
+    parseInt(salary_year),
+    parsedAdvanceSalary.toFixed(2),
+    parseInt(paid_days),
+    parseInt(holidays) || 0,
+    parseInt(leaves) || 0,
+    parsedGrossSalary.toFixed(2),
+    parsedPfDeduction.toFixed(2),
+    parsedProfessionalTax.toFixed(2),
+    parsedPerformanceBonus.toFixed(2),
+    parsedArrears.toFixed(2),
+    parsedTotalDeductions.toFixed(2),
+    parsedNetSalary.toFixed(2),
+    id,
+  ];
 
-        return res.status(500).json({
-          error: "Database error while checking employee",
-        });
-      }
+  console.log("Executing update query with values:", values);
 
-      if (employeeResults.length === 0) {
-        return res.status(400).json({
-          error: `Employee ID ${emp_id} does not exist`,
-        });
-      }
+  db.query(updateQuery, values, (err, result) => {
+    if (err) {
+      console.error("Error updating payslip:", err);
 
-      const employee = employeeResults[0];
-
-      // --------------------------------------------------
-      // 4. Convert numeric values safely
-      // --------------------------------------------------
-
-      const parsedMonth = parseInt(salary_month, 10);
-      const parsedYear = parseInt(salary_year, 10);
-      const parsedPaidDays = parseInt(paid_days, 10);
-
-      const parsedHolidays = parseInt(holidays, 10) || 0;
-      const parsedLeaves = parseInt(leaves, 10) || 0;
-
-      const parsedAdvanceSalary = parseFloat(advance_salary) || 0;
-
-      const parsedGrossSalary = parseFloat(gross_salary) || 0;
-
-      const parsedPfDeduction = parseFloat(pf_deduction) || 0;
-
-      const parsedProfessionalTax = parseFloat(professional_tax_deduction) || 0;
-
-      const parsedPerformanceBonus = parseFloat(performance_bonus) || 0;
-
-      const parsedArrears = parseFloat(arrears) || 0;
-
-      const parsedTotalDeductions = parseFloat(total_deductions) || 0;
-
-      const parsedNetSalary = parseFloat(net_salary) || 0;
-
-      // --------------------------------------------------
-      // 5. Validate month/year/paid days
-      // --------------------------------------------------
-
+      // Handle specific MySQL errors
       if (
-        !Number.isInteger(parsedMonth) ||
-        parsedMonth < 1 ||
-        parsedMonth > 12
+        err.code === "ER_DATA_TOO_LONG" ||
+        err.code === "ER_TRUNCATED_WRONG_VALUE"
       ) {
         return res.status(400).json({
-          error: "Invalid salary month",
+          error: "Salary value out of range. Please check the amounts.",
         });
       }
-
-      if (
-        !Number.isInteger(parsedYear) ||
-        parsedYear < 2000 ||
-        parsedYear > 2100
-      ) {
+      if (err.code === "ER_BAD_NULL_ERROR") {
         return res.status(400).json({
-          error: "Invalid salary year",
+          error: "Required field cannot be null",
         });
       }
 
-      if (!Number.isInteger(parsedPaidDays) || parsedPaidDays < 0) {
-        return res.status(400).json({
-          error: "Invalid paid days",
-        });
-      }
+      return res.status(500).json({ error: "Database error: " + err.message });
+    }
 
-      // --------------------------------------------------
-      // 6. Validate decimal range
-      // DECIMAL(10,2)
-      // --------------------------------------------------
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Payslip not found" });
+    }
 
-      const maxAmount = 99999999.99;
+    console.log(
+      "Payslip updated successfully, affected rows:",
+      result.affectedRows,
+    );
 
-      const amountFields = [
-        ["advance_salary", parsedAdvanceSalary],
-        ["gross_salary", parsedGrossSalary],
-        ["pf_deduction", parsedPfDeduction],
-        ["professional_tax_deduction", parsedProfessionalTax],
-        ["performance_bonus", parsedPerformanceBonus],
-        ["arrears", parsedArrears],
-        ["total_deductions", parsedTotalDeductions],
-        ["net_salary", parsedNetSalary],
-      ];
-
-      for (const [fieldName, value] of amountFields) {
-        if (value < 0) {
-          return res.status(400).json({
-            error: `${fieldName} cannot be negative`,
-          });
-        }
-
-        if (value > maxAmount) {
-          return res.status(400).json({
-            error: `${fieldName} exceeds maximum allowed value`,
-          });
-        }
-      }
-
-      // --------------------------------------------------
-      // 7. Update payslip
-      // --------------------------------------------------
-
-      const updateQuery = `
-        UPDATE payslip
-        SET
-          emp_id = ?,
-          salary_month = ?,
-          salary_year = ?,
-          advance_salary = ?,
-          paid_days = ?,
-          holidays = ?,
-          leaves = ?,
-          gross_salary = ?,
-          pf_deduction = ?,
-          professional_tax_deduction = ?,
-          performance_bonus = ?,
-          arrears = ?,
-          total_deductions = ?,
-          net_salary = ?
-        WHERE id = ?
-      `;
-
-      const values = [
-        emp_id,
-        parsedMonth,
-        parsedYear,
-        parsedAdvanceSalary.toFixed(2),
-        parsedPaidDays,
-        parsedHolidays,
-        parsedLeaves,
-        parsedGrossSalary.toFixed(2),
-        parsedPfDeduction.toFixed(2),
-        parsedProfessionalTax.toFixed(2),
-        parsedPerformanceBonus.toFixed(2),
-        parsedArrears.toFixed(2),
-        parsedTotalDeductions.toFixed(2),
-        parsedNetSalary.toFixed(2),
-        id,
-      ];
-
-      console.log("Updating payslip with:");
-      console.log(values);
-
-      db.query(updateQuery, values, (err, result) => {
-        if (err) {
-          console.error("Error updating payslip:", err);
-
-          // Foreign key error
-          if (err.code === "ER_NO_REFERENCED_ROW_2") {
-            return res.status(400).json({
-              error: `Employee ID ${emp_id} does not exist`,
-            });
-          }
-
-          // Duplicate key
-          if (err.code === "ER_DUP_ENTRY") {
-            return res.status(400).json({
-              error:
-                "A payslip already exists for this employee, month and year.",
-            });
-          }
-
-          // Invalid value
-          if (err.code === "ER_TRUNCATED_WRONG_VALUE") {
-            return res.status(400).json({
-              error: "Invalid value supplied for one of the fields",
-            });
-          }
-
-          // Null error
-          if (err.code === "ER_BAD_NULL_ERROR") {
-            return res.status(400).json({
-              error: "A required field cannot be null",
-            });
-          }
-
-          return res.status(500).json({
-            error: "Database error: " + err.message,
-          });
-        }
-
-        // --------------------------------------------------
-        // 8. Make sure the payslip actually exists
-        // --------------------------------------------------
-
-        if (result.affectedRows === 0) {
-          return res.status(404).json({
-            error: "Payslip not found or no changes were made",
-          });
-        }
-
-        console.log("Payslip updated successfully:", id);
-
-        // --------------------------------------------------
-        // 9. Fetch updated payslip + employee details
-        // --------------------------------------------------
-
-        const selectQuery = `
-          SELECT
-            p.*,
-            e.name,
-            e.designation,
-            e.PAN,
-            e.bank_account_number,
-            e.IFSC_code,
-            e.bank_name,
-            e.pf_applicable
-          FROM payslip p
-          JOIN employee e
-            ON p.emp_id = e.emp_id
-          WHERE p.id = ?
+    // Get the updated payslip with employee details
+    const selectQuery = `
+            SELECT p.*, e.name, e.designation, e.bank_account_number, e.IFSC_code, e.bank_name, e.PAN, e.pf_applicable
+            FROM payslip p
+            JOIN employee e ON p.emp_id = e.emp_id
+            WHERE p.id = ?
         `;
 
-        db.query(selectQuery, [id], (err, results) => {
-          if (err) {
-            console.error("Error fetching updated payslip:", err);
-
-            return res.status(500).json({
-              error: "Payslip updated but failed to fetch updated data",
-            });
-          }
-
-          if (results.length === 0) {
-            return res.status(404).json({
-              error: "Payslip updated but could not be retrieved",
-            });
-          }
-
-          console.log("Updated payslip returned:", results[0]);
-
-          return res.json({
-            message: "Payslip updated successfully",
-            payslip: results[0],
-            employee: employee,
-          });
-        });
+    db.query(selectQuery, [id], (err, results) => {
+      if (err) {
+        console.error("Error fetching updated payslip:", err);
+        return res.json({ message: "Payslip updated successfully" });
+      }
+      console.log("Returning updated payslip:", results[0]);
+      res.json({
+        message: "Payslip updated successfully",
+        payslip: results[0],
       });
     });
   });

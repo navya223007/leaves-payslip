@@ -38,8 +38,8 @@ import { FaEdit, FaTrash, FaEye } from "react-icons/fa";
 import ReadEmployeePage from "./ReadEmpolyePage"; // adjust the path
 import Login from "./Login";
 
-// const API_BASE_URL = "http://192.168.29.239:7014/api";
-const API_BASE_URL = "http://localhost:7014/api";
+// const API_BASE_URL = "http://192.168.29.239:8014/api";
+const API_BASE_URL = "http://localhost:8014/api";
 
 // Main App component with routing
 function AppContent() {
@@ -271,7 +271,7 @@ function AppContent() {
   // Show message helper
   const showMessage = (type, text) => {
     setMessage({ type, text });
-    setTimeout(() => setMessage({ type: "", text: "" }), 7014);
+    setTimeout(() => setMessage({ type: "", text: "" }), 8014);
   };
 
   // Fetch all employees
@@ -321,7 +321,7 @@ function AppContent() {
         throw new Error("Username and password are required");
       }
 
-      const response = await fetch("http://localhost:7014/api/login", {
+      const response = await fetch("http://localhost:8014/api/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -448,7 +448,7 @@ function AppContent() {
   const handleEmployeeSubmit = async (e) => {
     e.preventDefault();
 
-    // 🔥 ADD FULL FORM VALIDATION FIRST
+    // Full form validation
     if (!validateEmployeeForm()) {
       showMessage("error", "Please fix form errors");
       return;
@@ -457,15 +457,14 @@ function AppContent() {
     setLoading(true);
 
     try {
-      // ✅ (Optional) Date check already covered in validation,
-      // but keeping extra safety is fine
+      // Extra date validation
       if (!validateDateFormat(employeeForm.date_of_joining)) {
         showMessage("error", "Please enter valid date DD/MM/YYYY");
         setLoading(false);
         return;
       }
 
-      // Convert date format
+      // Prepare employee data
       const employeeData = {
         ...employeeForm,
         date_of_joining: convertToDBFormat(employeeForm.date_of_joining),
@@ -473,29 +472,38 @@ function AppContent() {
       };
 
       if (editingEmployee) {
+        // IMPORTANT:
+        // Use the ORIGINAL/OLD employee ID in the URL.
+        // employeeForm.emp_id contains the NEW employee ID.
         await axios.put(
-          `${API_BASE_URL}/employees/${employeeForm.emp_id}`,
+          `${API_BASE_URL}/employees/${editingEmployee.emp_id}`,
           employeeData,
         );
+
         showMessage("success", "Employee updated successfully");
       } else {
+        // Create new employee
         await axios.post(`${API_BASE_URL}/employees`, employeeData);
+
         showMessage("success", "Employee created successfully");
       }
 
-      fetchEmployees();
+      // Refresh employee list
+      await fetchEmployees();
+
+      // Reset form
       resetEmployeeForm();
     } catch (error) {
+      console.error("Error saving employee:", error);
+
       showMessage(
         "error",
         error.response?.data?.error || "Error saving employee",
       );
-      console.error("Error:", error);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
-  };
-  // Generate Employee Details PDF (hidden from UI)
+  }; // Generate Employee Details PDF (hidden from UI)
   const generateEmployeeDetailsPDF = async () => {
     showMessage("info", "PDF generation is handled through Excel export");
   };
@@ -987,7 +995,6 @@ function AppContent() {
                           name="emp_id"
                           value={employeeForm.emp_id}
                           onChange={handleEmployeeInputChange}
-                          disabled={editingEmployee}
                           required
                         />
                       </Col>

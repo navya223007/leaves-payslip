@@ -15,7 +15,7 @@ import PayslipGeneration from "./PayslipGeneration";
 import ReadEmployeePage from "./ReadEmpolyePage";
 import "./payslip.css";
 
-// const API_BASE_URL = "http://localhost:7014/api";
+// const API_BASE_URL = "http://localhost:8016/api";
 const API_BASE_URL = "/api";
 const TABS = [
   { key: "employees",    label: "Employee Management", icon: FaUsers },
@@ -155,11 +155,11 @@ const fetchEmployees = useCallback(async () => {
     const ifscRe = /^[A-Z]{4}0[A-Z0-9]{6}$/;
     if (!employeeForm.PAN) errs.PAN = "PAN is required";
     else if (!panRe.test(employeeForm.PAN.toUpperCase())) errs.PAN = "Invalid PAN";
-    else if (employees.some(e => String(e.PAN).toUpperCase()===String(employeeForm.PAN).toUpperCase() && e.emp_id!==employeeForm.emp_id))
+    else if (employees.some(e => String(e.PAN).toUpperCase()===String(employeeForm.PAN).toUpperCase() && e.emp_id!==editingEmployee?.emp_id))
       errs.PAN = "PAN already exists";
     if (!employeeForm.bank_account_number) errs.bank_account_number = "Account required";
     else if (!accRe.test(employeeForm.bank_account_number)) errs.bank_account_number = "Invalid account";
-    else if (employees.some(e => String(e.bank_account_number).trim()===String(employeeForm.bank_account_number).trim() && e.emp_id!==employeeForm.emp_id))
+    else if (employees.some(e => String(e.bank_account_number).trim()===String(employeeForm.bank_account_number).trim() && e.emp_id!==editingEmployee?.emp_id))
       errs.bank_account_number = "Account already exists";
     if (!employeeForm.IFSC_code) errs.IFSC_code = "IFSC required";
     else if (!ifscRe.test(employeeForm.IFSC_code.toUpperCase())) errs.IFSC_code = "Invalid IFSC";
@@ -195,7 +195,7 @@ const fetchEmployees = useCallback(async () => {
     try {
       const data = { ...employeeForm, date_of_joining: convertToDBFormat(employeeForm.date_of_joining) };
       if (editingEmployee) {
-        await api.put(`${API_BASE_URL}/employees/${employeeForm.emp_id}`, data);
+        await api.put(`${API_BASE_URL}/employees/${editingEmployee.emp_id}`, data);
         showMessage("success","Employee updated successfully");
       } else {
         await api.post(`${API_BASE_URL}/employees`, data);
@@ -377,7 +377,7 @@ const handleViewPayslip = (payslip) => {
                 <Row className="g-3">
                   <Col lg={4} md={6} sm={12}>
                     <Form.Label>Employee ID *</Form.Label>
-                    <Form.Control name="emp_id" value={employeeForm.emp_id} onChange={handleEmployeeInputChange} disabled={!!editingEmployee} required />
+                    <Form.Control name="emp_id" value={employeeForm.emp_id} onChange={handleEmployeeInputChange} required />
                   </Col>
                   <Col lg={4} md={6} sm={12}>
                     <Form.Label>Name *</Form.Label>

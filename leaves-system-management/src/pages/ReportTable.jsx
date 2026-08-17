@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import api from "../api";
 import { useAuth } from "../context/AuthContext.jsx";
+import "./ReportTable.css";
+
 function ReportTable({ role }) {
   const { user } = useAuth();
 
@@ -12,16 +14,23 @@ function ReportTable({ role }) {
   const [status, setStatus] = useState("all");
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const reportsPerPage = 10;
+  const reportsPerPage = 6;
 
   // ================= FETCH EMPLOYEES =================
 
   useEffect(() => {
     const fetchEmployees = async () => {
-      if (role === "admin") {
+      if (role !== "admin") return;
+
+      try {
         const res = await api.get("/employees-reports");
-        setEmployees(res.data);
+
+        setEmployees(Array.isArray(res.data) ? res.data : []);
+      } catch (err) {
+        console.error("Employee fetch error:", err);
       }
     };
 
@@ -32,20 +41,38 @@ function ReportTable({ role }) {
 
   useEffect(() => {
     const fetchReports = async () => {
-      const empIdToSend = role === "employee" ? user?.emp_id : empId;
+      // Employee login - wait until user is available
+      if (role === "employee" && !user?.emp_id) {
+        return;
+      }
 
-      const res = await api.get("/api/leaves/report", {
-        params: {
-          role,
-          emp_id: empIdToSend,
-          month,
-          status,
-        },
-      });
+      try {
+        setLoading(true);
+        setError("");
 
-      setReports(res.data);
+        const empIdToSend = role === "employee" ? user?.emp_id : empId;
 
-      setCurrentPage(1);
+        const res = await api.get("/api/leaves/report", {
+          params: {
+            role,
+            emp_id: empIdToSend,
+            month,
+            status,
+          },
+        });
+
+        setReports(Array.isArray(res.data) ? res.data : []);
+        setCurrentPage(1);
+      } catch (err) {
+        console.error("Report fetch error:", err);
+
+        setReports([]);
+        setError(
+          err?.response?.data?.message || "Unable to load leave reports.",
+        );
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchReports();
@@ -54,17 +81,16 @@ function ReportTable({ role }) {
   // ================= PAGINATION =================
 
   const indexOfLast = currentPage * reportsPerPage;
-
   const indexOfFirst = indexOfLast - reportsPerPage;
 
   const currentReports = reports.slice(indexOfFirst, indexOfLast);
 
   const totalPages = Math.ceil(reports.length / reportsPerPage);
 
-  // ================= STATUS STYLE =================
+  // ================= STATUS CLASS =================
 
-  const getStatusClass = (status) => {
-    switch (status) {
+  const getStatusClass = (leaveStatus) => {
+    switch (String(leaveStatus || "").toLowerCase()) {
       case "approved":
         return "statusApproved";
 
@@ -76,96 +102,198 @@ function ReportTable({ role }) {
     }
   };
 
+  // ================= LEAVE TYPE =================
+
+  const getLeaveType = (report) => {
+    const type = String(
+      report.leave_type || report.type || report.leaveType || "",
+    ).toLowerCase();
+
+    const dayType = String(
+      report.day_type ||
+        report.half_day_type ||
+        report.halfDayType ||
+        report.leave_period ||
+        "",
+    ).toLowerCase();
+
+    if (
+      type.includes("half") ||
+      dayType.includes("half") ||
+      dayType.includes("morning") ||
+      dayType.includes("afternoon")
+    ) {
+      if (dayType.includes("morning")) {
+        return (
+          <span className="leaveType">
+            Half Day <span>🌅 Morning</span>
+          </span>
+        );
+      }
+
+      return (
+        <span className="leaveType">
+          Half Day <span>🌇 Afternoon</span>
+        </span>
+      );
+    }
+
+    return (
+      <span className="leaveType">
+        Full Day <span>📅 Single Day</span>
+      </span>
+    );
+  };
+
+  // ================= DATE FORMAT =================
+
+  const formatDateTime = (value) => {
+    if (!value) return "-";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return date.toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+  };
+
+  const formatDate = (value) => {
+    if (!value) return "-";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return date.toLocaleDateString("en-GB");
+  };
+
+  // ================= PAGE CHANGE =================
+
+  const handlePrevious = () => {
+    if (currentPage > 1) {
+      setCurrentPage((prev) => prev - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage((prev) => prev + 1);
+    }
+  };
+
   return (
-    <div className="reportPage">
+    <div className="leaveReportsPage">
       {/* ================= HEADER ================= */}
 
-      <div className="topHeader">
+      <div className="reportsHeader">
         <div>
-          <h2 className="pageTitle">Leave Reports</h2>
+          <h1>Leave Reports</h1>
 
-          <p className="pageSubTitle">
-            Employee leave reports and approval tracking
-          </p>
+          <p>Employee leave reports and approval tracking</p>
         </div>
 
-        <div className="reportCountBox">
+        <div className="totalReportsCard">
           <span>Total Reports</span>
-
-          <h3>{reports.length}</h3>
+          <strong>{reports.length}</strong>
         </div>
       </div>
 
       {/* ================= FILTERS ================= */}
 
-      <div className="filterCard">
-        <div className="filterGrid">
-          {/* EMPLOYEE */}
+      <div className="reportsFilters">
+        {/* Employee Filter - Admin Only */}
 
-          {role === "admin" && (
-            <div className="filterItem">
-              <label>Employee</label>
-
-              <select value={empId} onChange={(e) => setEmpId(e.target.value)}>
-                <option value="all">All Employees</option>
-
-                {employees.map((emp) => (
-                  <option key={emp.emp_id} value={emp.emp_id}>
-                    {emp.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* MONTH */}
-
-          <div className="filterItem">
-            <label className="form-label">Month</label>
+        {role === "admin" && (
+          <div className="filterGroup">
+            <label>Employee</label>
 
             <select
-              className="form-select py-2"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
+              value={empId}
+              onChange={(e) => {
+                setEmpId(e.target.value);
+                setCurrentPage(1);
+              }}
             >
-              <option value="all">All Months</option>
+              <option value="all">All Employees</option>
 
-              {[...Array(12)].map((_, i) => (
-                <option key={i + 1} value={i + 1}>
-                  {new Date(0, i).toLocaleString("default", {
-                    month: "long",
-                  })}
+              {employees.map((employee) => (
+                <option key={employee.emp_id} value={employee.emp_id}>
+                  {employee.emp_id} - {employee.name}
                 </option>
               ))}
             </select>
           </div>
-          {/* STATUS */}
+        )}
 
-          <div className="filterItem">
-            <label className="form-label">Status</label>
+        {/* Month */}
 
-            <select
-              className="form-select"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              style={{
-                paddingRight: "45px",
-              }}
-            >
-              <option value="all">All</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div>
+        <div className="filterGroup">
+          <label>Month</label>
+
+          <select
+            value={month}
+            onChange={(e) => {
+              setMonth(e.target.value);
+              setCurrentPage(1);
+            }}
+          >
+            <option value="all">All Months</option>
+            <option value="1">January</option>
+            <option value="2">February</option>
+            <option value="3">March</option>
+            <option value="4">April</option>
+            <option value="5">May</option>
+            <option value="6">June</option>
+            <option value="7">July</option>
+            <option value="8">August</option>
+            <option value="9">September</option>
+            <option value="10">October</option>
+            <option value="11">November</option>
+            <option value="12">December</option>
+          </select>
+        </div>
+
+        {/* Status */}
+
+        <div className="filterGroup">
+          <label>Status</label>
+
+          <select
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setCurrentPage(1);
+            }}
+          >
+            <option value="all">All</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
         </div>
       </div>
 
+      {/* ================= ERROR ================= */}
+
+      {error && <div className="reportError">{error}</div>}
+
       {/* ================= TABLE ================= */}
 
-      <div className="tableCard">
-        <div className="table-responsive">
-          <table className="modernTable">
+      <div className="reportsTableCard">
+        <div className="tableScroll">
+          <table className="reportsTable">
             <thead>
               <tr>
                 <th>Emp ID</th>
@@ -182,695 +310,139 @@ function ReportTable({ role }) {
             </thead>
 
             <tbody>
-              {currentReports.length === 0 ? (
+              {loading ? (
                 <tr>
-                  <td colSpan="10">
-                    <div className="emptyBox">No records found</div>
+                  <td colSpan="10" className="tableMessage">
+                    Loading leave reports...
+                  </td>
+                </tr>
+              ) : currentReports.length === 0 ? (
+                <tr>
+                  <td colSpan="10" className="tableMessage">
+                    No leave reports found.
                   </td>
                 </tr>
               ) : (
-                currentReports.map((r) => (
-                  <tr key={r.id}>
-                    {/* EMP ID */}
+                currentReports.map((report, index) => {
+                  const reportStatus =
+                    report.status || report.leave_status || "pending";
 
-                    <td>
-                      <div className="empIdBox">{r.emp_id || "-"}</div>
-                    </td>
+                  return (
+                    <tr key={report.id || report.leave_id || index}>
+                      {/* EMP ID */}
+                      <td>
+                        <strong className="employeeId">
+                          {report.emp_id || "-"}
+                        </strong>
+                      </td>
 
-                    {/* NAME */}
+                      {/* NAME */}
+                      <td>{report.name || report.employee_name || "-"}</td>
 
-                    <td>
-                      <div className="nameBox">{r.name || "-"}</div>
-                    </td>
+                      {/* DEPARTMENT */}
+                      <td>
+                        {report.department || report.department_name || "-"}
+                      </td>
 
-                    {/* DEPARTMENT */}
+                      {/* LEAVE TYPE */}
+                      <td>{getLeaveType(report)}</td>
 
-                    <td>
-                      <span className="deptBadge">{r.department || "-"}</span>
-                    </td>
-
-                    {/* LEAVE TYPE */}
-
-                    <td>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          gap: "5px",
-                        }}
-                      >
-                        {/* LEAVE TYPE */}
-                        <span
-                          className="badge"
-                          style={{
-                            background:
-                              r.leave_type === "half"
-                                ? "linear-gradient(135deg,#ff9800,#ffb74d)"
-                                : "#0d6efd",
-                            color: "#fff",
-                            padding: "7px 14px",
-                            borderRadius: "30px",
-                            fontWeight: "700",
-                            fontSize: "13px",
-                            textTransform: "capitalize",
-                          }}
-                        >
-                          {r.leave_type === "half"
-                            ? "Half Day"
-                            : r.leave_type === "full"
-                              ? "Full Day"
-                              : r.leave_type}
-                        </span>
-
-                        {/* SESSION */}
-                        {r.leave_type === "half" && (
-                          <small
-                            style={{
-                              background: "#eef4ff",
-                              color: "#0d6efd",
-                              padding: "4px 10px",
-                              borderRadius: "20px",
-                              fontWeight: "600",
-                              fontSize: "12px",
-                            }}
-                          >
-                            {r.session === "morning"
-                              ? "🌅 Morning"
-                              : r.session === "afternoon"
-                                ? "🌇 Afternoon"
-                                : "-"}
-                          </small>
+                      {/* APPLIED TIME */}
+                      <td className="dateCell">
+                        {formatDateTime(
+                          report.applied_at ||
+                            report.created_at ||
+                            report.applied_time,
                         )}
+                      </td>
 
-                        {/* FULL DAY TYPE */}
-                        {r.leave_type === "full" && (
-                          <small
-                            style={{
-                              background: "#f3f4f6",
-                              color: "#111827",
-                              padding: "4px 10px",
-                              borderRadius: "20px",
-                              fontWeight: "600",
-                              fontSize: "12px",
-                            }}
-                          >
-                            {r.sub_type === "single"
-                              ? "📅 Single Day"
-                              : r.sub_type === "multi"
-                                ? "🗓 Multiple Days"
-                                : "-"}
-                          </small>
-                        )}
-                      </div>
-                    </td>
-                    {/* APPLIED TIME */}
-
-                    <td>
-                      {r.created_at
-                        ? new Date(r.created_at).toLocaleString()
-                        : "-"}
-                    </td>
-
-                    {/* REASON */}
-                    <td>
-                      <div
-                        className="reasonType"
-                        style={{
-                          textTransform: "capitalize",
-                          fontWeight: "600",
-                        }}
-                      >
-                        {r.reason_type === "other"
-                          ? "Other Description"
-                          : r.reason_type || "-"}
-                      </div>
-
-                      {r.reason_type === "other" && r.reason_text && (
-                        <small
-                          className="reasonText"
-                          style={{
-                            display: "block",
-                            color: "#64748b",
-                            marginTop: "2px",
-                          }}
-                        >
-                          👉 {r.reason_text}
-                        </small>
-                      )}
-                    </td>
-
-                    {/* DATE */}
-                    <td>
-                      {r.leave_type === "full" && r.sub_type === "multi" ? (
-                        r.selected_dates && r.selected_dates.length > 0 ? (
-                          <div
-                            style={{
-                              display: "flex",
-                              flexWrap: "wrap",
-                              gap: "4px",
-                              maxWidth: "250px",
-                            }}
-                          >
-                            {r.selected_dates.map((d, idx) => (
-                              <span
-                                key={idx}
-                                className="badge bg-secondary"
-                                style={{ fontSize: "11px" }}
-                              >
-                                {d}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-muted">-</span>
-                        )
-                      ) : (
-                        <div style={{ fontWeight: "500" }}>
-                          {r.date ? new Date(r.date).toLocaleDateString() : "-"}
+                      {/* REASON */}
+                      <td className="reasonCell">
+                        <div className="reasonType">
+                          {report.reason_type === "other"
+                            ? "Other Description"
+                            : report.reason_type || "-"}
                         </div>
-                      )}
-                    </td>
 
-                    {/* STATUS */}
+                        {report.reason_type === "other" &&
+                          report.reason_text && (
+                            <div className="reasonText">
+                              👉 {report.reason_text}
+                            </div>
+                          )}
+                      </td>
 
-                    <td>
-                      <span
-                        className={`statusBadge ${getStatusClass(r.status)}`}
-                      >
-                        {r.status}
-                      </span>
-                    </td>
+                      {/* LEAVE DATE */}
+                      <td>{formatDate(report.date || report.leave_date)}</td>
 
-                    {/* ACTION TIME */}
+                      {/* STATUS */}
+                      <td>
+                        <span
+                          className={`statusBadge ${getStatusClass(
+                            reportStatus,
+                          )}`}
+                        >
+                          {reportStatus}
+                        </span>
+                      </td>
 
-                    <td>
-                      {r.action_time
-                        ? new Date(r.action_time).toLocaleString()
-                        : "-"}
-                    </td>
+                      {/* ACCEPTED TIME */}
+                      <td className="dateCell">
+                        {formatDateTime(
+                          report.accepted_time ||
+                            report.approved_at ||
+                            report.approved_time,
+                        )}
+                      </td>
 
-                    {/* REJECT REASON */}
-
-                    <td className="rejectReason">{r.reject_reason || "-"}</td>
-                  </tr>
-                ))
+                      {/* REJECT REASON */}
+                      <td className="reasonCell">
+                        <div className="rejectReason">
+                          {report.reject_reason ||
+                            report.rejection_reason ||
+                            "-"}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
+
+        {/* ================= PAGINATION ================= */}
+
+        {!loading && reports.length > 0 && (
+          <div className="pagination">
+            <button
+              type="button"
+              onClick={handlePrevious}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </button>
+
+            <div className="pageInfo">
+              <span>Page</span>
+
+              <strong>{currentPage}</strong>
+
+              <span>/</span>
+
+              <strong>{totalPages}</strong>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={currentPage === totalPages || totalPages === 0}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
-
-      {/* ================= PAGINATION ================= */}
-
-      <div className="paginationWrapper">
-        <button
-          className="pageBtn"
-          onClick={() => setCurrentPage((p) => p - 1)}
-          disabled={currentPage === 1}
-        >
-          Previous
-        </button>
-
-        <div className="pageNumber">
-          {currentPage} / {totalPages}
-        </div>
-
-        <button
-          className="pageBtn"
-          onClick={() => setCurrentPage((p) => p + 1)}
-          disabled={currentPage === totalPages}
-        >
-          Next
-        </button>
-      </div>
-
-      <style>{`
-/* ================= GLOBAL PAGE ================= */
-
-.reportPage{
-  min-height:100vh;
-  padding:24px;
-  background:linear-gradient(135deg,#eef4ff,#f8fbff,#edf2ff);
-  width:100%;
-  overflow-x:hidden;
-}
-
-/* ================= DARK MODE PAGE ================= */
-
-.bg-dark .reportPage{
-  background:linear-gradient(135deg,#0f172a,#111827,#1e293b);
-}
-
-/* ================= TOP HEADER ================= */
-
-.topHeader{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:18px;
-  flex-wrap:wrap;
-  margin-bottom:24px;
-}
-
-.pageTitle{
-  margin:0;
-  font-size:32px;
-  font-weight:800;
-  color:#0f172a;
-}
-
-.pageSubTitle{
-  margin-top:6px;
-  color:#475569;
-  font-size:14px;
-  font-weight:500;
-}
-
-.bg-dark .pageTitle{
-  color:#ffffff;
-}
-
-.bg-dark .pageSubTitle{
-  color:#cbd5e1;
-}
-
-/* ================= REPORT COUNT ================= */
-
-.reportCountBox{
-  background:linear-gradient(135deg,#0d6efd,#6610f2);
-  color:#fff;
-  padding:18px 22px;
-  border-radius:18px;
-  min-width:180px;
-  text-align:center;
-  box-shadow:0 12px 30px rgba(13,110,253,0.25);
-}
-
-.reportCountBox span{
-  font-size:13px;
-  opacity:0.9;
-}
-
-.reportCountBox h3{
-  margin:5px 0 0;
-  font-size:30px;
-  font-weight:800;
-}
-
-/* ================= FILTER CARD ================= */
-
-.filterCard{
-  background:#ffffff;
-  border-radius:24px;
-  padding:22px;
-  margin-bottom:24px;
-  box-shadow:0 10px 30px rgba(0,0,0,0.06);
-}
-
-.bg-dark .filterCard{
-  background:#1e293b;
-  border:1px solid #334155;
-  box-shadow:none;
-}
-
-/* ================= FILTER GRID ================= */
-
-.filterGrid{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:18px;
-}
-
-/* ================= FILTER ITEM ================= */
-
-.filterItem{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-}
-
-.filterItem label{
-  font-size:14px;
-  font-weight:700;
-  color:#1e293b;
-}
-
-.bg-dark .filterItem label{
-  color:#f8fafc;
-}
-
-/* ================= SELECT BOX ================= */
-
-.filterItem select{
-  height:50px;
-  border-radius:14px;
-  border:1px solid #dbeafe;
-  background:#f8fbff;
-  padding:0 14px;
-  font-size:14px;
-  font-weight:600;
-  color:#111827;
-  outline:none;
-  transition:0.25s;
-}
-
-.filterItem select:focus{
-  border-color:#0d6efd;
-  box-shadow:0 0 0 4px rgba(13,110,253,0.12);
-}
-
-/* DARK MODE SELECT */
-
-.bg-dark .filterItem select{
-  background:#0f172a;
-  border:1px solid #334155;
-  color:#ffffff;
-}
-
-.bg-dark .filterItem select option{
-  background:#111827;
-  color:#ffffff;
-}
-
-/* ================= TABLE CARD ================= */
-
-.tableCard{
-  background:#ffffff;
-  border-radius:24px;
-  overflow:hidden;
-  box-shadow:0 12px 30px rgba(0,0,0,0.06);
-}
-
-.bg-dark .tableCard{
-  background:#1e293b;
-  border:1px solid #334155;
-  box-shadow:none;
-}
-
-/* ================= TABLE ================= */
-
-.table-responsive{
-  width:100%;
-  overflow-x:auto;
-}
-
-.modernTable{
-  width:100%;
-  min-width:1450px;
-  border-collapse:separate;
-  border-spacing:0 8px;
-  padding:0 10px 10px;
-}
-
-/* ================= TABLE HEAD ================= */
-
-.modernTable thead tr{
-  background:linear-gradient(135deg,#0d6efd,#6610f2);
-}
-
-.modernTable th{
-  padding:18px 14px;
-  font-size:13px;
-  font-weight:800;
-  color:#ffffff;
-  border:none;
-  white-space:nowrap;
-}
-
-.modernTable th:first-child{
-  border-top-left-radius:16px;
-  border-bottom-left-radius:16px;
-}
-
-.modernTable th:last-child{
-  border-top-right-radius:16px;
-  border-bottom-right-radius:16px;
-}
-
-/* ================= TABLE BODY ================= */
-
-.modernTable td{
-  background:#ffffff;
-  padding:16px 14px;
-  border:none;
-  vertical-align:middle;
-  white-space:nowrap;
-  font-size:13px;
-  color:#111827;
-  font-weight:600;
-}
-
-.bg-dark .modernTable td{
-  background:#111827;
-  color:#f8fafc;
-}
-
-.modernTable tbody tr td:first-child{
-  border-top-left-radius:16px;
-  border-bottom-left-radius:16px;
-}
-
-.modernTable tbody tr td:last-child{
-  border-top-right-radius:16px;
-  border-bottom-right-radius:16px;
-}
-
-/* ================= ROW HOVER ================= */
-
-.modernTable tbody tr{
-  transition:0.2s ease;
-}
-
-.modernTable tbody tr:hover td{
-  background:#f8fbff;
-}
-
-.bg-dark .modernTable tbody tr:hover td{
-  background:#172033;
-}
-
-/* ================= TEXT COLORS ================= */
-
-.empIdBox{
-  color:#2563eb;
-  font-weight:800;
-}
-
-.nameBox{
-  color:#111827;
-  font-weight:800;
-}
-
-.bg-dark .nameBox{
-  color:#ffffff;
-}
-
-/* ================= BADGES ================= */
-
-.deptBadge{
-  background:#e0ecff;
-  color:#0d6efd;
-  padding:6px 12px;
-  border-radius:30px;
-  font-size:12px;
-  font-weight:700;
-}
-
-.statusBadge{
-  padding:7px 14px;
-  border-radius:30px;
-  font-size:12px;
-  font-weight:800;
-  text-transform:capitalize;
-}
-
-.statusApproved{
-  background:#dcfce7;
-  color:#15803d;
-}
-
-.statusRejected{
-  background:#fee2e2;
-  color:#dc2626;
-}
-
-.statusPending{
-  background:#fef3c7;
-  color:#d97706;
-}
-
-/* ================= REASON ================= */
-
-.reasonType{
-  color:#111827 !important;
-  font-weight:700 !important;
-}
-
-.reasonText{
-  color:#475569 !important;
-  font-size:12px;
-  font-weight:600;
-}
-
-.rejectReason{
-  color:#dc2626 !important;
-  font-weight:700;
-  max-width:220px;
-  white-space:normal;
-  line-height:1.5;
-}
-
-.bg-dark .reasonType{
-  color:#ffffff !important;
-}
-
-.bg-dark .reasonText{
-  color:#cbd5e1 !important;
-}
-
-.bg-dark .rejectReason{
-  color:#f87171 !important;
-}
-
-/* ================= DATE & TIME ================= */
-
-.modernTable td:nth-child(5),
-.modernTable td:nth-child(7),
-.modernTable td:nth-child(9){
-  color:#1e293b;
-  font-weight:700;
-}
-
-.bg-dark .modernTable td:nth-child(5),
-.bg-dark .modernTable td:nth-child(7),
-.bg-dark .modernTable td:nth-child(9){
-  color:#f1f5f9;
-}
-
-/* ================= EMPTY ================= */
-
-.emptyBox{
-  padding:50px 20px;
-  text-align:center;
-  font-size:16px;
-  font-weight:700;
-  color:#64748b;
-}
-
-.bg-dark .emptyBox{
-  color:#cbd5e1;
-}
-
-/* ================= PAGINATION ================= */
-
-.paginationWrapper{
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  gap:12px;
-  margin-top:24px;
-  flex-wrap:wrap;
-}
-
-.pageBtn{
-  border:none;
-  background:linear-gradient(135deg,#0d6efd,#6610f2);
-  color:#fff;
-  padding:11px 18px;
-  border-radius:14px;
-  font-size:13px;
-  font-weight:700;
-  min-width:110px;
-  transition:0.2s;
-}
-
-.pageBtn:hover{
-  transform:translateY(-2px);
-}
-
-.pageBtn:disabled{
-  opacity:0.5;
-}
-
-.pageNumber{
-  background:#ffffff;
-  color:#111827;
-  padding:10px 16px;
-  border-radius:12px;
-  font-size:14px;
-  font-weight:800;
-  box-shadow:0 4px 12px rgba(0,0,0,0.06);
-}
-
-.bg-dark .pageNumber{
-  background:#1e293b;
-  color:#ffffff;
-}
-
-/* ================= RESPONSIVE ================= */
-
-@media(max-width:992px){
-
-  .filterGrid{
-    grid-template-columns:repeat(2,1fr);
-  }
-
-  .pageTitle{
-    font-size:26px;
-  }
-
-  .modernTable{
-    min-width:1300px;
-  }
-}
-
-@media(max-width:768px){
-
-  .reportPage{
-    padding:14px;
-  }
-
-  .topHeader{
-    flex-direction:column;
-    align-items:stretch;
-  }
-
-  .reportCountBox{
-    width:100%;
-  }
-
-  .filterGrid{
-    grid-template-columns:1fr;
-  }
-
-  .pageTitle{
-    font-size:22px;
-  }
-
-  .modernTable{
-    min-width:1200px;
-  }
-
-  .pageBtn{
-    min-width:90px;
-    padding:9px 12px;
-    font-size:12px;
-  }
-}
-
-@media(max-width:480px){
-
-  .paginationWrapper{
-    flex-direction:column;
-  }
-
-  .pageBtn,
-  .pageNumber{
-    width:100%;
-    text-align:center;
-  }
-}`}</style>
     </div>
   );
 }

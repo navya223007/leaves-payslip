@@ -87,8 +87,8 @@ function PayslipGeneration() {
 
     // Calculate PF only if applicable
     const pf = emp.pf_applicable
-  ? Math.min(Math.round((basic * 12) / 100), 1800)
-  : 0;
+      ? Math.min(Math.round((basic * 12) / 100), 1800)
+      : 0;
 
     const professionalTax = emp.professional_tax
       ? Number(emp.professional_tax)
@@ -140,18 +140,18 @@ function PayslipGeneration() {
   // Fetch Employees from port 7008
   useEffect(() => {
     setLoading(true);
-     api
+    api
       .get("/api/employees")
       .then((res) => {
         setEmployees(res.data);
         setLoading(false);
       })
-    // axios
-    //   .get("http://localhost:7014/api/employees")
-    //   .then((res) => {
-    //     setEmployees(res.data);
-    //     setLoading(false);
-    //   })
+      // axios
+      //   .get("http://localhost:8016/api/employees")
+      //   .then((res) => {
+      //     setEmployees(res.data);
+      //     setLoading(false);
+      //   })
       .catch((err) => {
         console.error("Error fetching employees:", err);
         setError(
@@ -331,8 +331,8 @@ function PayslipGeneration() {
 
     // Calculate PF only if applicable
     const pf = emp.pf_applicable
-  ? Math.min(Math.round((basic * 12) / 100), 1800)
-  : 0;
+      ? Math.min(Math.round((basic * 12) / 100), 1800)
+      : 0;
 
     const netSalary =
       grossAfterAttendance -
@@ -422,14 +422,10 @@ function PayslipGeneration() {
         alert("Payslip updated successfully!");
       } else {
         // Create new payslip
-        response = await api.post(
-          "/api/payslips/save",
-          payslipData,
-          {
-            headers: { "Content-Type": "application/json" },
-            timeout: 7008,
-          },
-        );
+        response = await api.post("/api/payslips/save", payslipData, {
+          headers: { "Content-Type": "application/json" },
+          timeout: 7008,
+        });
         alert("Payslip saved successfully!");
       }
 
@@ -810,10 +806,7 @@ function PayslipGeneration() {
                     <strong className="me-3" style={{ minWidth: "120px" }}>
                       PAN:
                     </strong>
-                    <span>
-                      {generatedData.employee?.PAN ||
-                        "N/A"}
-                    </span>
+                    <span>{generatedData.employee?.PAN || "N/A"}</span>
                   </div>
                 </div>
 
@@ -1067,4 +1060,3 @@ function numberToWords(num) {
   return convert(integerPart);
 }
 export default PayslipGeneration;
-
