@@ -503,7 +503,9 @@ function AppContent() {
     } finally {
       setLoading(false);
     }
-  }; // Generate Employee Details PDF (hidden from UI)
+  };
+
+  // Generate Employee Details PDF (hidden from UI)
   const generateEmployeeDetailsPDF = async () => {
     showMessage("info", "PDF generation is handled through Excel export");
   };
