@@ -141,7 +141,7 @@ function PayslipGeneration() {
   useEffect(() => {
     setLoading(true);
     axios
-      .get("http://localhost:8016/api/employees")
+      .get("http://localhost:7016/api/employees")
       .then((res) => {
         setEmployees(res.data);
         setLoading(false);

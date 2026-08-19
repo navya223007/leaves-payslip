@@ -27,7 +27,7 @@ try {
 console.log("========================================");
 console.log("🚀 STARTING SERVER VERSION 5.0 🚀");
 console.log("========================================");
-const PAYSLIP_API_URL = "http://localhost:8016/api";
+const PAYSLIP_API_URL = "http://localhost:7016/api";
 const app = express();
 app.get("/api/health", (req, res) =>
   res.json({ version: "5.0", status: "ok" }),
@@ -2731,7 +2731,7 @@ app.use((req, res) => {
 });
 
 // ================= START SERVER =================
-const PORT = process.env.BACKEND_PORT || 8017;
+const PORT = process.env.BACKEND_PORT || 7017;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
