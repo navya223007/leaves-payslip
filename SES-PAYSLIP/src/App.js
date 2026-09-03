@@ -46,60 +46,278 @@ function AppContent() {
   // navya
   const [sidebarOpen, setSidebarOpen] = useState(false); // <-- Fixes your error
   const [menuOpen, setMenuOpen] = useState(false);
-  const validateEmployeeForm = () => {
-    let errors = {};
+ const validateEmployeeForm = () => {
+  let errors = {};
 
-    // Regex
-    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-    const accRegex = /^[0-9]{9,18}$/;
-    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+  // Regex
+  const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+  const accRegex = /^[0-9]{9,18}$/;
+  const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
-    // PAN VALIDATION
-    if (!employeeForm.PAN) {
-      errors.PAN = "PAN is required";
-    } else if (!panRegex.test(employeeForm.PAN.toUpperCase())) {
-      errors.PAN = "Invalid PAN (Ex: ABCDE1234F)";
-    } else if (
-      employees.some(
-        (emp) =>
-          String(emp.PAN).toUpperCase() ===
-            String(employeeForm.PAN).toUpperCase() &&
-          emp.emp_id !== employeeForm.emp_id,
-      )
-    ) {
+  // Trim values
+  const empId = String(employeeForm.emp_id || "").trim();
+  const name = String(employeeForm.name || "").trim();
+  const designation = String(employeeForm.designation || "").trim();
+  const pan = String(employeeForm.PAN || "").trim().toUpperCase();
+  const accountNumber = String(
+    employeeForm.bank_account_number || ""
+  ).trim();
+  const ifsc = String(employeeForm.IFSC_code || "").trim().toUpperCase();
+  const bankName = String(employeeForm.bank_name || "").trim();
+
+  // =========================================================
+  // EMPLOYEE ID VALIDATION
+  // =========================================================
+
+  if (!empId) {
+    errors.emp_id = "Employee ID is required";
+  } else {
+    const duplicateEmployee = employees.some((emp) => {
+      const existingId = String(emp.emp_id || "").trim().toLowerCase();
+
+      // While editing, ignore the current employee's original ID
+      if (
+        editingEmployee &&
+        existingId ===
+          String(editingEmployee.emp_id || "").trim().toLowerCase()
+      ) {
+        return false;
+      }
+
+      return existingId === empId.toLowerCase();
+    });
+
+    if (duplicateEmployee) {
+      errors.emp_id = "Employee ID already exists";
+    }
+  }
+
+  // =========================================================
+  // NAME VALIDATION
+  // =========================================================
+
+  if (!name) {
+    errors.name = "Name is required";
+  }
+
+  // =========================================================
+  // DESIGNATION VALIDATION
+  // =========================================================
+
+  if (!designation) {
+    errors.designation = "Designation is required";
+  }
+
+  // =========================================================
+  // DATE OF JOINING VALIDATION
+  // =========================================================
+
+  if (!employeeForm.date_of_joining) {
+    errors.date_of_joining = "Date of Joining is required";
+  } else if (!validateDateFormat(employeeForm.date_of_joining)) {
+    errors.date_of_joining = "Enter a valid date (DD/MM/YYYY)";
+  } else {
+    const [day, month, year] = employeeForm.date_of_joining
+      .split("/")
+      .map(Number);
+
+    const joiningDate = new Date(year, month - 1, day);
+
+    // Remove time from today's date
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Future date not allowed
+    if (joiningDate > today) {
+      errors.date_of_joining = "Future date is not allowed";
+    }
+  }
+
+  // =========================================================
+  // PAN VALIDATION
+  // =========================================================
+
+  if (!pan) {
+    errors.PAN = "PAN is required";
+  } else if (!panRegex.test(pan)) {
+    errors.PAN = "Invalid PAN (Ex: ABCDE1234F)";
+  } else {
+    const duplicatePAN = employees.some((emp) => {
+      const existingPAN = String(emp.PAN || "")
+        .trim()
+        .toUpperCase();
+
+      // Ignore current employee while editing
+      if (
+        editingEmployee &&
+        String(emp.emp_id || "").trim() ===
+          String(editingEmployee.emp_id || "").trim()
+      ) {
+        return false;
+      }
+
+      return existingPAN === pan;
+    });
+
+    if (duplicatePAN) {
       errors.PAN = "PAN already exists";
     }
+  }
 
-    // BANK ACCOUNT VALIDATION
-    if (!employeeForm.bank_account_number) {
-      errors.bank_account_number = "Account number required";
-    } else if (!accRegex.test(employeeForm.bank_account_number)) {
-      errors.bank_account_number = "Invalid account number";
-    } else if (
-      employees.some(
-        (emp) =>
-          String(emp.bank_account_number).trim() ===
-            String(employeeForm.bank_account_number).trim() &&
-          emp.emp_id !== employeeForm.emp_id,
-      )
-    ) {
-      errors.bank_account_number = "Account already exists";
+  // =========================================================
+  // BASIC SALARY VALIDATION
+  // =========================================================
+
+  if (
+    employeeForm.basic_salary === "" ||
+    employeeForm.basic_salary === null ||
+    employeeForm.basic_salary === undefined
+  ) {
+    errors.basic_salary = "Basic Salary is required";
+  } else if (Number(employeeForm.basic_salary) < 0) {
+    errors.basic_salary = "Basic Salary cannot be negative";
+  } else if (isNaN(Number(employeeForm.basic_salary))) {
+    errors.basic_salary = "Enter a valid Basic Salary";
+  }
+
+  // =========================================================
+  // HRA VALIDATION
+  // =========================================================
+
+  if (
+    employeeForm.house_rent_allowence !== "" &&
+    employeeForm.house_rent_allowence !== null &&
+    employeeForm.house_rent_allowence !== undefined
+  ) {
+    if (Number(employeeForm.house_rent_allowence) < 0) {
+      errors.house_rent_allowence = "HRA cannot be negative";
+    } else if (isNaN(Number(employeeForm.house_rent_allowence))) {
+      errors.house_rent_allowence = "Enter a valid HRA";
     }
+  }
 
-    // IFSC VALIDATION
-    if (!employeeForm.IFSC_code) {
-      errors.IFSC_code = "IFSC required";
-    } else if (!ifscRegex.test(employeeForm.IFSC_code.toUpperCase())) {
-      errors.IFSC_code = "Invalid IFSC (Ex: SBIN0001234)";
+  // =========================================================
+  // TRANSPORT VALIDATION
+  // =========================================================
+
+  if (
+    employeeForm.transport_allowance !== "" &&
+    employeeForm.transport_allowance !== null &&
+    employeeForm.transport_allowance !== undefined
+  ) {
+    if (Number(employeeForm.transport_allowance) < 0) {
+      errors.transport_allowance = "Transport allowance cannot be negative";
+    } else if (isNaN(Number(employeeForm.transport_allowance))) {
+      errors.transport_allowance = "Enter a valid Transport allowance";
     }
+  }
 
-    // Debug (you can remove later)
-    console.log("Validation Errors:", errors);
+  // =========================================================
+  // INTERNET VALIDATION
+  // =========================================================
 
-    setErrors(errors);
+  if (
+    employeeForm.internet_allowance !== "" &&
+    employeeForm.internet_allowance !== null &&
+    employeeForm.internet_allowance !== undefined
+  ) {
+    if (Number(employeeForm.internet_allowance) < 0) {
+      errors.internet_allowance = "Internet allowance cannot be negative";
+    } else if (isNaN(Number(employeeForm.internet_allowance))) {
+      errors.internet_allowance = "Enter a valid Internet allowance";
+    }
+  }
 
-    return Object.keys(errors).length === 0;
-  };
+  // =========================================================
+  // MEDICAL VALIDATION
+  // =========================================================
+
+  if (
+    employeeForm.medical_allowance !== "" &&
+    employeeForm.medical_allowance !== null &&
+    employeeForm.medical_allowance !== undefined
+  ) {
+    if (Number(employeeForm.medical_allowance) < 0) {
+      errors.medical_allowance = "Medical allowance cannot be negative";
+    } else if (isNaN(Number(employeeForm.medical_allowance))) {
+      errors.medical_allowance = "Enter a valid Medical allowance";
+    }
+  }
+
+  // =========================================================
+  // PROFESSIONAL TAX VALIDATION
+  // =========================================================
+
+  if (
+    employeeForm.professional_tax !== "" &&
+    employeeForm.professional_tax !== null &&
+    employeeForm.professional_tax !== undefined
+  ) {
+    if (Number(employeeForm.professional_tax) < 0) {
+      errors.professional_tax = "Professional Tax cannot be negative";
+    } else if (isNaN(Number(employeeForm.professional_tax))) {
+      errors.professional_tax = "Enter a valid Professional Tax";
+    }
+  }
+
+  // =========================================================
+  // BANK ACCOUNT VALIDATION
+  // =========================================================
+
+  if (!accountNumber) {
+    errors.bank_account_number = "Account number is required";
+  } else if (!accRegex.test(accountNumber)) {
+    errors.bank_account_number =
+      "Account number must contain 9-18 digits";
+  } else {
+    const duplicateAccount = employees.some((emp) => {
+      const existingAccount = String(emp.bank_account_number || "").trim();
+
+      // Ignore current employee while editing
+      if (
+        editingEmployee &&
+        String(emp.emp_id || "").trim() ===
+          String(editingEmployee.emp_id || "").trim()
+      ) {
+        return false;
+      }
+
+      return existingAccount === accountNumber;
+    });
+
+    if (duplicateAccount) {
+      errors.bank_account_number = "Account number already exists";
+    }
+  }
+
+  // =========================================================
+  // IFSC VALIDATION
+  // =========================================================
+
+  if (!ifsc) {
+    errors.IFSC_code = "IFSC is required";
+  } else if (!ifscRegex.test(ifsc)) {
+    errors.IFSC_code = "Invalid IFSC (Ex: SBIN0001234)";
+  }
+
+  // =========================================================
+  // BANK NAME VALIDATION
+  // =========================================================
+
+  if (!bankName) {
+    errors.bank_name = "Bank Name is required";
+  }
+
+  // =========================================================
+  // SET ERRORS
+  // =========================================================
+
+  console.log("Validation Errors:", errors);
+
+  setErrors(errors);
+
+  return Object.keys(errors).length === 0;
+};
 
   const [errors, setErrors] = useState({});
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -969,208 +1187,311 @@ function AppContent() {
                     Employee Details
                   </Card.Header>
 
-                  <Card.Body>
-                    <Row className="g-3">
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>Employee ID *</Form.Label>
-                        <Form.Control
-                          name="emp_id"
-                          value={employeeForm.emp_id}
-                          onChange={handleEmployeeInputChange}
-                          required
-                        />
-                      </Col>
+              <Card.Body>
+  <Row className="g-3">
 
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>Name *</Form.Label>
-                        <Form.Control
-                          name="name"
-                          value={employeeForm.name}
-                          onChange={handleEmployeeInputChange}
-                          required
-                        />
-                      </Col>
+    {/* Employee ID */}
+    <Col lg={4} md={6} sm={12}>
+      <Form.Label>Employee ID *</Form.Label>
 
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>Designation *</Form.Label>
-                        <Form.Control
-                          name="designation"
-                          value={employeeForm.designation}
-                          onChange={handleEmployeeInputChange}
-                          required
-                        />
-                      </Col>
+      <Form.Control
+        name="emp_id"
+        value={employeeForm.emp_id}
+        onChange={handleEmployeeInputChange}
+        isInvalid={!!errors.emp_id}
+        required
+      />
 
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>Date of Joining *</Form.Label>
-                        <Form.Control
-                          name="date_of_joining"
-                          value={employeeForm.date_of_joining}
-                          onChange={handleEmployeeInputChange}
-                          placeholder="DD/MM/YYYY"
-                          required
-                        />
-                      </Col>
+      <Form.Control.Feedback type="invalid">
+        {errors.emp_id}
+      </Form.Control.Feedback>
+    </Col>
 
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>PAN *</Form.Label>
-                        <Form.Control
-                          name="PAN"
-                          value={employeeForm.PAN}
-                          onChange={handleEmployeeInputChange}
-                          required
-                        />
-                      </Col>
-                    </Row>
-                  </Card.Body>
+
+    {/* Name */}
+    <Col lg={4} md={6} sm={12}>
+      <Form.Label>Name *</Form.Label>
+
+      <Form.Control
+        name="name"
+        value={employeeForm.name}
+        onChange={handleEmployeeInputChange}
+        isInvalid={!!errors.name}
+        required
+      />
+
+      <Form.Control.Feedback type="invalid">
+        {errors.name}
+      </Form.Control.Feedback>
+    </Col>
+
+
+    {/* Designation */}
+    <Col lg={4} md={6} sm={12}>
+      <Form.Label>Designation *</Form.Label>
+
+      <Form.Control
+        name="designation"
+        value={employeeForm.designation}
+        onChange={handleEmployeeInputChange}
+        isInvalid={!!errors.designation}
+        required
+      />
+
+      <Form.Control.Feedback type="invalid">
+        {errors.designation}
+      </Form.Control.Feedback>
+    </Col>
+
+
+    {/* Date of Joining */}
+    <Col lg={4} md={6} sm={12}>
+      <Form.Label>Date of Joining *</Form.Label>
+
+      <Form.Control
+        name="date_of_joining"
+        value={employeeForm.date_of_joining}
+        onChange={handleEmployeeInputChange}
+        placeholder="DD/MM/YYYY"
+        isInvalid={!!errors.date_of_joining}
+        required
+      />
+
+      <Form.Control.Feedback type="invalid">
+        {errors.date_of_joining}
+      </Form.Control.Feedback>
+    </Col>
+
+
+    {/* PAN */}
+    <Col lg={4} md={6} sm={12}>
+      <Form.Label>PAN *</Form.Label>
+
+      <Form.Control
+        name="PAN"
+        value={employeeForm.PAN}
+        onChange={handleEmployeeInputChange}
+        isInvalid={!!errors.PAN}
+        style={{ textTransform: "uppercase" }}
+        required
+      />
+
+      <Form.Control.Feedback type="invalid">
+        {errors.PAN}
+      </Form.Control.Feedback>
+    </Col>
+
+  </Row>
+</Card.Body>
                 </Card>
 
-                {/* Salary */}
-                <Card className="mb-4 shadow">
-                  <Card.Header className="text-center fw-bold bg-success text-dark text-white">
-                    Salary Details
-                  </Card.Header>
+              {/* Salary */}
+<Card className="mb-4 shadow">
+  <Card.Header className="text-center fw-bold bg-success text-dark text-white">
+    Salary Details
+  </Card.Header>
 
-                  <Card.Body>
-                    <Row className="g-3 align-items-end">
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>Basic Salary *</Form.Label>
-                        <Form.Control
-                          type="number"
-                          name="basic_salary"
-                          value={employeeForm.basic_salary}
-                          onChange={handleEmployeeInputChange}
-                          required
-                        />
-                      </Col>
+  <Card.Body>
+    <Row className="g-3 align-items-end">
 
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Check
-                          type="checkbox"
-                          name="pf_applicable"
-                          checked={employeeForm.pf_applicable}
-                          onChange={handleEmployeeInputChange}
-                          label="PF Applicable (12%)"
-                          className="mt-4"
-                        />
-                      </Col>
+      {/* Basic Salary */}
+      <Col lg={4} md={6} sm={12}>
+        <Form.Label>Basic Salary *</Form.Label>
+        <Form.Control
+          type="number"
+          name="basic_salary"
+          value={employeeForm.basic_salary}
+          onChange={handleEmployeeInputChange}
+          min="0"
+          isInvalid={!!errors.basic_salary}
+          required
+        />
+        <Form.Control.Feedback type="invalid">
+          {errors.basic_salary}
+        </Form.Control.Feedback>
+      </Col>
 
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>PF Amount</Form.Label>
-                        <Form.Control
-                          value={
-                            employeeForm.pf_applicable &&
-                            employeeForm.basic_salary
-                              ? `₹ ${calculatePF(employeeForm.basic_salary, true).toFixed(2)}`
-                              : "₹ 0"
-                          }
-                          readOnly
-                          className="bg-light fw-bold"
-                        />
-                      </Col>
+      {/* PF Applicable */}
+      <Col lg={4} md={6} sm={12}>
+        <Form.Check
+          type="checkbox"
+          name="pf_applicable"
+          checked={employeeForm.pf_applicable}
+          onChange={handleEmployeeInputChange}
+          label="PF Applicable (12%)"
+          className="mt-4"
+        />
+      </Col>
 
-                      {employeeForm.pf_applicable &&
-                        employeeForm.basic_salary && (
-                          <Col xs={12}>
-                            <small className="text-success">
-                              PF = 12% of Basic Salary
-                            </small>
-                          </Col>
-                        )}
+      {/* PF Amount */}
+      <Col lg={4} md={6} sm={12}>
+        <Form.Label>PF Amount</Form.Label>
+        <Form.Control
+          value={
+            employeeForm.pf_applicable &&
+            employeeForm.basic_salary
+              ? `₹ ${calculatePF(
+                  employeeForm.basic_salary,
+                  true
+                ).toFixed(2)}`
+              : "₹ 0"
+          }
+          readOnly
+          className="bg-light fw-bold"
+        />
+      </Col>
 
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>HRA</Form.Label>
-                        <Form.Control
-                          type="number"
-                          name="house_rent_allowence"
-                          value={employeeForm.house_rent_allowence}
-                          onChange={handleEmployeeInputChange}
-                        />
-                      </Col>
+      {employeeForm.pf_applicable &&
+        employeeForm.basic_salary && (
+          <Col xs={12}>
+            <small className="text-success">
+              PF = 12% of Basic Salary
+            </small>
+          </Col>
+        )}
 
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>Transport</Form.Label>
-                        <Form.Control
-                          type="number"
-                          name="transport_allowance"
-                          value={employeeForm.transport_allowance}
-                          onChange={handleEmployeeInputChange}
-                        />
-                      </Col>
+      {/* HRA */}
+      <Col lg={4} md={6} sm={12}>
+        <Form.Label>HRA</Form.Label>
+        <Form.Control
+          type="number"
+          name="house_rent_allowence"
+          value={employeeForm.house_rent_allowence}
+          onChange={handleEmployeeInputChange}
+          min="0"
+          isInvalid={!!errors.house_rent_allowence}
+        />
+        <Form.Control.Feedback type="invalid">
+          {errors.house_rent_allowence}
+        </Form.Control.Feedback>
+      </Col>
 
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>Internet</Form.Label>
-                        <Form.Control
-                          type="number"
-                          name="internet_allowance"
-                          value={employeeForm.internet_allowance}
-                          onChange={handleEmployeeInputChange}
-                        />
-                      </Col>
+      {/* Transport */}
+      <Col lg={4} md={6} sm={12}>
+        <Form.Label>Transport</Form.Label>
+        <Form.Control
+          type="number"
+          name="transport_allowance"
+          value={employeeForm.transport_allowance}
+          onChange={handleEmployeeInputChange}
+          min="0"
+          isInvalid={!!errors.transport_allowance}
+        />
+        <Form.Control.Feedback type="invalid">
+          {errors.transport_allowance}
+        </Form.Control.Feedback>
+      </Col>
 
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>Medical</Form.Label>
-                        <Form.Control
-                          type="number"
-                          name="medical_allowance"
-                          value={employeeForm.medical_allowance}
-                          onChange={handleEmployeeInputChange}
-                        />
-                      </Col>
+      {/* Internet */}
+      <Col lg={4} md={6} sm={12}>
+        <Form.Label>Internet</Form.Label>
+        <Form.Control
+          type="number"
+          name="internet_allowance"
+          value={employeeForm.internet_allowance}
+          onChange={handleEmployeeInputChange}
+          min="0"
+          isInvalid={!!errors.internet_allowance}
+        />
+        <Form.Control.Feedback type="invalid">
+          {errors.internet_allowance}
+        </Form.Control.Feedback>
+      </Col>
 
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>Professional Tax</Form.Label>
-                        <Form.Control
-                          type="number"
-                          name="professional_tax"
-                          value={employeeForm.professional_tax}
-                          onChange={handleEmployeeInputChange}
-                        />
-                      </Col>
-                    </Row>
-                  </Card.Body>
-                </Card>
+      {/* Medical */}
+      <Col lg={4} md={6} sm={12}>
+        <Form.Label>Medical</Form.Label>
+        <Form.Control
+          type="number"
+          name="medical_allowance"
+          value={employeeForm.medical_allowance}
+          onChange={handleEmployeeInputChange}
+          min="0"
+          isInvalid={!!errors.medical_allowance}
+        />
+        <Form.Control.Feedback type="invalid">
+          {errors.medical_allowance}
+        </Form.Control.Feedback>
+      </Col>
 
-                {/* Bank */}
-                <Card className="mb-4 shadow">
-                  <Card.Header className="text-center fw-bold bg-secondary text-white">
-                    Bank Details
-                  </Card.Header>
+      {/* Professional Tax */}
+      <Col lg={4} md={6} sm={12}>
+        <Form.Label>Professional Tax</Form.Label>
+        <Form.Control
+          type="number"
+          name="professional_tax"
+          value={employeeForm.professional_tax}
+          onChange={handleEmployeeInputChange}
+          min="0"
+          isInvalid={!!errors.professional_tax}
+        />
+        <Form.Control.Feedback type="invalid">
+          {errors.professional_tax}
+        </Form.Control.Feedback>
+      </Col>
 
-                  <Card.Body>
-                    <Row className="g-3">
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>Account Number *</Form.Label>
-                        <Form.Control
-                          name="bank_account_number"
-                          value={employeeForm.bank_account_number}
-                          onChange={handleEmployeeInputChange}
-                          required
-                        />
-                      </Col>
+    </Row>
+  </Card.Body>
+</Card>
 
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>IFSC *</Form.Label>
-                        <Form.Control
-                          name="IFSC_code"
-                          value={employeeForm.IFSC_code}
-                          onChange={handleEmployeeInputChange}
-                          required
-                        />
-                      </Col>
 
-                      <Col lg={4} md={6} sm={12}>
-                        <Form.Label>Bank Name *</Form.Label>
-                        <Form.Control
-                          name="bank_name"
-                          value={employeeForm.bank_name}
-                          onChange={handleEmployeeInputChange}
-                          required
-                        />
-                      </Col>
-                    </Row>
-                  </Card.Body>
-                </Card>
+{/* Bank */}
+<Card className="mb-4 shadow">
+  <Card.Header className="text-center fw-bold bg-secondary text-white">
+    Bank Details
+  </Card.Header>
+
+  <Card.Body>
+    <Row className="g-3">
+
+      {/* Account Number */}
+      <Col lg={4} md={6} sm={12}>
+        <Form.Label>Account Number *</Form.Label>
+        <Form.Control
+          name="bank_account_number"
+          value={employeeForm.bank_account_number}
+          onChange={handleEmployeeInputChange}
+          isInvalid={!!errors.bank_account_number}
+          required
+        />
+        <Form.Control.Feedback type="invalid">
+          {errors.bank_account_number}
+        </Form.Control.Feedback>
+      </Col>
+
+      {/* IFSC */}
+      <Col lg={4} md={6} sm={12}>
+        <Form.Label>IFSC *</Form.Label>
+        <Form.Control
+          name="IFSC_code"
+          value={employeeForm.IFSC_code}
+          onChange={handleEmployeeInputChange}
+          isInvalid={!!errors.IFSC_code}
+          required
+        />
+        <Form.Control.Feedback type="invalid">
+          {errors.IFSC_code}
+        </Form.Control.Feedback>
+      </Col>
+
+      {/* Bank Name */}
+      <Col lg={4} md={6} sm={12}>
+        <Form.Label>Bank Name *</Form.Label>
+        <Form.Control
+          name="bank_name"
+          value={employeeForm.bank_name}
+          onChange={handleEmployeeInputChange}
+          isInvalid={!!errors.bank_name}
+          required
+        />
+        <Form.Control.Feedback type="invalid">
+          {errors.bank_name}
+        </Form.Control.Feedback>
+      </Col>
+
+    </Row>
+  </Card.Body>
+</Card>
 
                 <div className="d-flex justify-content-between mt-3">
                   {/* Back Button on the left */}
