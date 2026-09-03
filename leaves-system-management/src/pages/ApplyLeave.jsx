@@ -18,7 +18,7 @@ export default function ApplyLeave() {
   const singleRef = useRef(null);
   const multiRef = useRef(null);
 
-  const today = new Date();
+const [serverDate, setServerDate] = useState(null);
 
   const [leaveType, setLeaveType] = useState("half");
   const [subType, setSubType] = useState("single");
@@ -32,6 +32,18 @@ export default function ApplyLeave() {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  useEffect(() => {
+  const fetchServerDate = async () => {
+    try {
+      const res = await api.get("/api/server-time");
+      setServerDate(new Date(res.data.date + "T00:00:00"));
+    } catch (error) {
+      console.error("Failed to get server date:", error);
+    }
+  };
+
+  fetchServerDate();
+}, []);
 
   useEffect(() => {
     if (!editData) return;
@@ -99,25 +111,29 @@ export default function ApplyLeave() {
     return null;
   };
 
-  const submit = async () => {
-    const err = validate();
-    if (err) return setError(err);
+ const submit = async () => {
+  const err = validate();
+  if (err) return setError(err);
 
-    const todayStr = formatLocalDate(new Date());
+  if (!serverDate) {
+    return setError("Unable to get server date. Please try again.");
+  }
 
-    let isEmergency = 0;
+  const todayStr = formatLocalDate(serverDate);
 
-    if (
-      (leaveType === "half" ||
-        (leaveType === "full" && subType === "single")) &&
-      date &&
-      formatLocalDate(date) === todayStr
-    ) {
-      isEmergency = 1;
-    }
+  let isEmergency = 0;
 
-    setError("");
-    setLoading(true);
+  if (
+    (leaveType === "half" ||
+      (leaveType === "full" && subType === "single")) &&
+    date &&
+    formatLocalDate(date) === todayStr
+  ) {
+    isEmergency = 1;
+  }
+
+  setError("");
+  setLoading(true);
 
     const payload = {
       emp_id: employee.emp_id,
@@ -291,7 +307,7 @@ export default function ApplyLeave() {
                         setDate(d);
                         setError("");
                       }}
-                      minDate={today}
+                      minDate={serverDate}
                       className="d-none"
                     />
                   </div>
@@ -314,7 +330,7 @@ export default function ApplyLeave() {
                         handleMultiDateChange(d);
                         setError("");
                       }}
-                      minDate={today}
+                      minDate={serverDate}
                       shouldCloseOnSelect={false}
                       dayClassName={getDayClassName}
                       className="d-none"
@@ -373,7 +389,7 @@ export default function ApplyLeave() {
                         setDate(d);
                         setError("");
                       }}
-                      minDate={today}
+                      minDate={serverDate}
                       className="d-none"
                     />
                   </div>

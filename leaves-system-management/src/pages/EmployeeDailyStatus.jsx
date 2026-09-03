@@ -22,7 +22,8 @@ function EmployeeDailyStatus() {
 
   const [employee, setEmployee] = useState({});
  
-  const [statusDate] = useState(new Date().toISOString().split("T")[0]);
+const [statusDate, setStatusDate] = useState("");
+const [serverDate, setServerDate] = useState(null);
   const [projectName, setProjectName] = useState("");
   const [description, setDescription] = useState("");
   const [assignedBy, setAssignedBy] = useState("");
@@ -31,6 +32,25 @@ function EmployeeDailyStatus() {
   const [loading, setLoading] = useState(false);
 
   const [editId, setEditId] = useState(null);
+  // ================= SERVER DATE =================
+
+useEffect(() => {
+  const fetchServerDate = async () => {
+    try {
+      const response = await api.get("/api/server-time");
+
+      const date = response.data.date;
+
+      setServerDate(date);
+      setStatusDate(date);
+    } catch (error) {
+      console.error("Failed to get server date:", error);
+      alert("Unable to get server date. Please try again.");
+    }
+  };
+
+  fetchServerDate();
+}, []);
 
   // ================= EMPLOYEE =================
 
@@ -56,6 +76,68 @@ useEffect(() => {
 }, [editData]);
 
   // ================= SUBMIT =================
+// const submitStatus = async () => {
+//   if (loading) return;
+
+//   try {
+//     if (!projectName || !description || !assignedBy) {
+//       alert("Please fill all fields");
+//       return;
+//     }
+
+//     const wordCount = description.trim().split(/\s+/).length;
+
+//     if (wordCount < 25) {
+//       alert("Please describe more. Minimum 25 words required.");
+//       return;
+//     }
+
+//     const today = new Date().toISOString().split("T")[0];
+
+//     // Only today's date is allowed
+//     if (statusDate !== today) {
+//       alert("You can submit Daily Status only for today's date.");
+//       return;
+//     }
+
+//     setLoading(true);
+
+//     if (editId) {
+//       await api.put(`/api/daily-status/update/${editId}`, {
+//         project_name: projectName,
+//         subtask: description,
+//         assigned_by: assignedBy,
+//         status_date: statusDate,
+//       });
+//     } else {
+//       await api.post("/api/daily-status", {
+//         emp_id: user.emp_id,
+//         project_name: projectName,
+//         subtask: description,
+//         assigned_by: assignedBy,
+//         status_date: statusDate,
+//       });
+//     }
+
+//     setProjectName("");
+//     setDescription("");
+//     setAssignedBy("");
+//     setEditId(null);
+
+//     navigate("/employee/daily-status-report");
+//   } catch (err) {
+//     if (err.response?.status === 400) {
+//       alert(err.response.data.message);
+//     } else {
+//       alert("Server Busy. Please Try Again.");
+//     }
+//   } finally {
+//     setLoading(false);
+//   }
+// };
+
+
+
 const submitStatus = async () => {
   if (loading) return;
 
@@ -72,15 +154,16 @@ const submitStatus = async () => {
       return;
     }
 
-    const today = new Date().toISOString().split("T")[0];
+    // ================= SERVER DATE VALIDATION =================
 
-    // Only today's date is allowed
-    if (statusDate !== today) {
-      alert("You can submit Daily Status only for today's date.");
+    if (!serverDate || !statusDate) {
+      alert("Unable to get server date. Please try again.");
       return;
     }
 
     setLoading(true);
+
+    // ================= UPDATE =================
 
     if (editId) {
       await api.put(`/api/daily-status/update/${editId}`, {
@@ -89,7 +172,11 @@ const submitStatus = async () => {
         assigned_by: assignedBy,
         status_date: statusDate,
       });
-    } else {
+    }
+
+    // ================= NEW STATUS =================
+
+    else {
       await api.post("/api/daily-status", {
         emp_id: user.emp_id,
         project_name: projectName,
@@ -115,6 +202,10 @@ const submitStatus = async () => {
     setLoading(false);
   }
 };
+
+
+
+
   // ================= UI =================
 
   return (
