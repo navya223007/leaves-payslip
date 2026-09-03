@@ -16,7 +16,8 @@ function ReportTable({ role }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
+  const [expandedReason, setExpandedReason] = useState(null);
+  const [expandedRejectReason, setExpandedRejectReason] = useState(null);
   const reportsPerPage = 6;
 
   // ================= FETCH EMPLOYEES =================
@@ -117,6 +118,7 @@ function ReportTable({ role }) {
         "",
     ).toLowerCase();
 
+    // ================= HALF DAY =================
     if (
       type.includes("half") ||
       dayType.includes("half") ||
@@ -138,6 +140,19 @@ function ReportTable({ role }) {
       );
     }
 
+    // ================= FULL DAY MULTIPLE =================
+    if (
+      type.includes("full") &&
+      String(report.sub_type || "").toLowerCase() === "multi"
+    ) {
+      return (
+        <span className="leaveType">
+          Full Day <span>📅 Multiple Days</span>
+        </span>
+      );
+    }
+
+    // ================= FULL DAY SINGLE =================
     return (
       <span className="leaveType">
         Full Day <span>📅 Single Day</span>
@@ -191,6 +206,83 @@ function ReportTable({ role }) {
     if (currentPage < totalPages) {
       setCurrentPage((prev) => prev + 1);
     }
+  };
+  // ================= COMPACT TEXT =================
+
+  const renderReasonText = (report) => {
+    const text =
+      report.reason_type === "other" && report.reason_text
+        ? String(report.reason_text).trim()
+        : "";
+
+    if (!text) {
+      return <div className="reasonType">{report.reason_type || "-"}</div>;
+    }
+
+    const id = report.id || report.leave_id;
+    const isExpanded = expandedReason === id;
+    const maxLength = 35;
+
+    return (
+      <div className="reasonCellContent">
+        <div className="reasonType">Other Description</div>
+
+        <div className={`reasonText ${isExpanded ? "expanded" : ""}`}>
+          👉{" "}
+          {isExpanded
+            ? text
+            : `${text.slice(0, maxLength)}${text.length > maxLength ? "..." : ""}`}
+        </div>
+
+        {text.length > maxLength && (
+          <button
+            type="button"
+            className="readMoreButton"
+            onClick={() => setExpandedReason(isExpanded ? null : id)}
+          >
+            {isExpanded ? "Read Less" : "Read More"}
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  // ================= COMPACT REJECT REASON =================
+
+  const renderRejectReason = (report) => {
+    const text = String(
+      report.reject_reason || report.rejection_reason || "",
+    ).trim();
+
+    if (!text) {
+      return "-";
+    }
+
+    const id = report.id || report.leave_id;
+    const isExpanded = expandedRejectReason === id;
+    const maxLength = 35;
+
+    return (
+      <div className="reasonCellContent">
+        <div className={`rejectReason ${isExpanded ? "expanded" : ""}`}>
+          {isExpanded
+            ? text
+            : `${text.slice(0, maxLength)}${
+                text.length > maxLength ? "..." : ""
+              }`}
+        </div>
+
+        {text.length > maxLength && (
+          <button
+            type="button"
+            className="readMoreButton"
+            onClick={() => setExpandedRejectReason(isExpanded ? null : id)}
+          >
+            {isExpanded ? "Read Less" : "Read More"}
+          </button>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -357,24 +449,38 @@ function ReportTable({ role }) {
                       </td>
 
                       {/* REASON */}
-                      <td className="reasonCell">
-                        <div className="reasonType">
-                          {report.reason_type === "other"
-                            ? "Other Description"
-                            : report.reason_type || "-"}
-                        </div>
-
-                        {report.reason_type === "other" &&
-                          report.reason_text && (
-                            <div className="reasonText">
-                              👉 {report.reason_text}
-                            </div>
-                          )}
-                      </td>
+                      <td className="reasonCell">{renderReasonText(report)}</td>
 
                       {/* LEAVE DATE */}
-                      <td>{formatDate(report.date || report.leave_date)}</td>
+                      <td>
+                        {report.sub_type === "multi"
+                          ? (() => {
+                              let dates = report.selected_dates;
 
+                              // MySQL JSON may already come as an array
+                              // or may come as a JSON string.
+                              if (typeof dates === "string") {
+                                try {
+                                  dates = JSON.parse(dates);
+                                } catch {
+                                  dates = [];
+                                }
+                              }
+
+                              if (!Array.isArray(dates) || dates.length === 0) {
+                                return "-";
+                              }
+
+                              return (
+                                <div className="multipleLeaveDates">
+                                  {dates.map((date, index) => (
+                                    <div key={index}>{date}</div>
+                                  ))}
+                                </div>
+                              );
+                            })()
+                          : formatDate(report.date || report.leave_date)}
+                      </td>
                       {/* STATUS */}
                       <td>
                         <span
@@ -397,11 +503,7 @@ function ReportTable({ role }) {
 
                       {/* REJECT REASON */}
                       <td className="reasonCell">
-                        <div className="rejectReason">
-                          {report.reject_reason ||
-                            report.rejection_reason ||
-                            "-"}
-                        </div>
+                        {renderRejectReason(report)}
                       </td>
                     </tr>
                   );

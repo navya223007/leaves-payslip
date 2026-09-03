@@ -27,7 +27,7 @@ try {
 console.log("========================================");
 console.log("🚀 STARTING SERVER VERSION 5.0 🚀");
 console.log("========================================");
-const PAYSLIP_API_URL = "http://localhost:7016/api";
+const PAYSLIP_API_URL = "http://localhost:8016/api";
 const app = express();
 app.get("/api/health", (req, res) =>
   res.json({ version: "5.0", status: "ok" }),
@@ -144,14 +144,12 @@ const verifyToken = (req, res, next) => {
 
 // ================= ADMIN OTP MAIL =================
 const ADMIN_EMAILS = {
-    ADMIN001: "softelectronics.pvtltd@gmail.com",
+  // ADMIN001: "softelectronics.pvtltd@gmail.com",
 
-    
   // ADMIN001: "softelectronicsolutions@gmail.com",
 
-
   // ADMIN002: "bodasunavya24@gmail.com",
-  //  ADMIN001: "bodasunavya24@gmail.com",
+  ADMIN001: "bodasunavya24@gmail.com",
   // ADMIN003: "admin3@gmail.com",
 };
 
@@ -161,6 +159,7 @@ const otpStore = new Map();
 // LOGIN API
 // ===========================
 app.post("/login", async (req, res) => {
+  console.log("✅ LOGIN ROUTE REGISTERED");
   try {
     const loginStart = Date.now();
 
@@ -467,13 +466,13 @@ app.post("/api/admin/verify-otp", (req, res) => {
 // 🔥 NEW AUTH VERIFICATION ROUTE
 //   Add verifyToken middleware
 app.get("/api/auth/verify", verifyToken, (req, res) => {
-  console.log("  Token verified for user:", req.user.emp_id);
+  console.log(" Token verified for user:", req.user.emp_id);
   res.json({ user: req.user });
 });
 
 //   Add verifyToken middleware here too
 app.get("/auth/verify", verifyToken, (req, res) => {
-  console.log("  Token verified for user (alias):", req.user.emp_id);
+  console.log(" Token verified for user (alias):", req.user.emp_id);
   res.json({ user: req.user });
 });
 
@@ -784,15 +783,16 @@ app.get("/api/server-time", (req, res) => {
 app.post("/api/leaves/apply", verifyToken, (req, res) => {
   const d = req.body;
 
-  const now = new Date();
+  const serverTime = getServerDateTime();
 
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
+  const currentHour = serverTime.hour;
+  const currentMinute = serverTime.minute;
 
   // Current time in minutes
   const currentTime = currentHour * 60 + currentMinute;
 
-  const today = new Date().toISOString().split("T")[0];
+  // SERVER SYSTEM DATE
+  const today = serverTime.date;
 
   const leaveDate = d.date;
 
@@ -1359,12 +1359,15 @@ app.get("/api/dashboard/admin-counts", verifyToken, (req, res) => {
   );
 });
 
+// api    daily-status
 app.post("/api/daily-status", verifyToken, (req, res) => {
   const d = req.body;
 
-  // ✅ Allow only today's date
-  const today = new Date().toISOString().split("T")[0];
+  // ✅ SERVER SYSTEM DATE
+  const serverTime = getServerDateTime();
+  const today = serverTime.date;
 
+  // ✅ Allow only today's date
   if (d.status_date !== today) {
     return res.status(400).json({
       message: "Daily Status can be submitted only for today's date.",
@@ -1461,9 +1464,11 @@ app.get("/api/daily-status/report", verifyToken, (req, res) => {
 app.put("/api/daily-status/update/:id", verifyToken, (req, res) => {
   const { project_name, subtask, assigned_by, status_date } = req.body;
 
-  // ✅ Allow only today's date
-  const today = new Date().toISOString().split("T")[0];
+  // ✅ SERVER SYSTEM DATE
+  const serverTime = getServerDateTime();
+  const today = serverTime.date;
 
+  // ✅ Allow only today's date
   if (status_date !== today) {
     return res.status(400).json({
       message: "Daily Status can be updated only for today's date.",
@@ -1480,7 +1485,6 @@ app.put("/api/daily-status/update/:id", verifyToken, (req, res) => {
         status_year = YEAR(?)
     WHERE id = ?
   `;
-
   db.query(
     sql,
     [
@@ -1550,7 +1554,6 @@ app.put("/api/daily-status/reject/:id", verifyToken, (req, res) => {
     },
   );
 });
-
 
 //navya
 // ======================================================
@@ -2051,121 +2054,6 @@ app.get("/api/download-file/:type/:filename", (req, res) => {
   });
 });
 
-// ======================================================
-// DOWNLOAD FULL EMPLOYEE ZIP
-// ======================================================
-
-// app.get("/api/download-employee/:emp_id", (req, res) => {
-//   const sql = `
-//     SELECT *
-//     FROM employee_personal_details
-//     WHERE emp_id=?
-//   `;
-
-//   db.query(sql, [req.params.emp_id], (err, result) => {
-//     if (err) {
-//       console.log(err);
-//       return res.status(500).json(err);
-//     }
-
-//     if (result.length === 0) {
-//       return res.status(404).json({
-//         message: "Employee not found",
-//       });
-//     }
-
-//     const emp = result[0];
-
-//     // ZIP FILE NAME
-//     const zipName = `${emp.emp_id}.zip`;
-
-//     // IMPORTANT
-//     res.attachment(zipName);
-
-//     // CREATE ZIP
-//     const archive = archiver("zip", {
-//       zlib: { level: 9 },
-//     });
-
-//     // ERROR HANDLE
-//     archive.on("error", (err) => {
-//       throw err;
-//     });
-
-//     // SEND ZIP TO RESPONSE
-//     archive.pipe(res);
-
-//     // ================= TEXT FILE =================
-
-//     const details = `
-// EMPLOYEE DETAILS
-
-// Employee ID : ${emp.emp_id}
-// Employee Name : ${emp.emp_name}
-
-// DOB : ${emp.date_of_birth}
-// DOJ : ${emp.date_of_joining}
-
-// AADHAAR : ${emp.aadhaar_number}
-// PAN : ${emp.pan_number}
-
-// BANK : ${emp.bank_account_number}
-// IFSC : ${emp.ifsc_code}
-
-// LAST APPRAISAL : ${emp.last_appraisal_date}
-// NEXT APPRAISAL : ${emp.next_appraisal_date}
-// `;
-
-//     archive.append(details, {
-//       name: "employee-details.txt",
-//     });
-
-//     // ================= AADHAAR =================
-
-//     if (emp.aadhaar_file) {
-//       const aadhaarPath = path.join(
-//         __dirname,
-//         "uploads",
-//         "aadhaar",
-//         emp.aadhaar_file,
-//       );
-
-//       if (fs.existsSync(aadhaarPath)) {
-//         archive.file(aadhaarPath, {
-//           name: emp.aadhaar_file,
-//         });
-//       }
-//     }
-
-//     // ================= PAN =================
-
-//     if (emp.pan_file) {
-//       const panPath = path.join(__dirname, "uploads", "pan", emp.pan_file);
-
-//       if (fs.existsSync(panPath)) {
-//         archive.file(panPath, {
-//           name: emp.pan_file,
-//         });
-//       }
-//     }
-
-//     // ================= BANK =================
-
-//     if (emp.bank_file) {
-//       const bankPath = path.join(__dirname, "uploads", "bank", emp.bank_file);
-
-//       if (fs.existsSync(bankPath)) {
-//         archive.file(bankPath, {
-//           name: emp.bank_file,
-//         });
-//       }
-//     }
-
-//     // FINALIZE ZIP
-//     archive.finalize();
-//   });
-// });
-
 app.get("/api/download-employee/:emp_id", (req, res) => {
   console.log("===== DOWNLOAD EMPLOYEE API =====");
   console.log("archiver:", archiver);
@@ -2285,138 +2173,6 @@ NEXT APPRAISAL : ${emp.next_appraisal_date}
   });
 });
 
-// ======================================================
-// DOWNLOAD ALL EMPLOYEE FILES
-// ======================================================
-
-// app.get("/api/download-all-personal-files", (req, res) => {
-//   const sql = `
-//     SELECT *
-//     FROM employee_personal_details
-//   `;
-
-//   db.query(sql, (err, results) => {
-//     if (err) {
-//       console.log("DB ERROR:", err);
-//       return res.status(500).json({
-//         message: "Database Error",
-//       });
-//     }
-
-//     // No employees found
-//     if (results.length === 0) {
-//       return res.status(404).json({
-//         message: "No Employee Data Found",
-//       });
-//     }
-
-//     // Check whether at least one file exists
-//     const hasFiles = results.some(
-//       (emp) => emp.aadhaar_file || emp.pan_file || emp.bank_file,
-//     );
-
-//     if (!hasFiles) {
-//       return res.status(404).json({
-//         message: "No Employee Files Found",
-//       });
-//     }
-
-//     // ZIP name
-//     res.attachment("All_Employee_Files.zip");
-
-//     // Create ZIP
-//     const archive = archiver("zip", {
-//       zlib: { level: 9 },
-//     });
-
-//     archive.on("error", (err) => {
-//       console.log("ARCHIVE ERROR:", err);
-
-//       if (!res.headersSent) {
-//         return res.status(500).json({
-//           message: "ZIP creation failed",
-//         });
-//       }
-//     });
-
-//     archive.pipe(res);
-
-//     // Loop all employees
-//     results.forEach((emp) => {
-//       const folderName = emp.emp_id || "Employee";
-
-//       // Employee details text file
-//       const details = `
-// EMPLOYEE DETAILS
-
-// Employee ID : ${emp.emp_id}
-// Employee Name : ${emp.emp_name}
-
-// DOB : ${emp.date_of_birth}
-// DOJ : ${emp.date_of_joining}
-
-// AADHAAR : ${emp.aadhaar_number}
-// PAN : ${emp.pan_number}
-
-// BANK : ${emp.bank_account_number}
-// IFSC : ${emp.ifsc_code}
-
-// LAST APPRAISAL : ${emp.last_appraisal_date}
-// NEXT APPRAISAL : ${emp.next_appraisal_date}
-// `;
-
-//       archive.append(details, {
-//         name: `${folderName}/employee-details.txt`,
-//       });
-
-//       // Aadhaar File
-//       if (emp.aadhaar_file) {
-//         const aadhaarPath = path.join(
-//           __dirname,
-//           "uploads",
-//           "aadhaar",
-//           emp.aadhaar_file,
-//         );
-
-//         if (fs.existsSync(aadhaarPath)) {
-//           archive.file(aadhaarPath, {
-//             name: `${folderName}/aadhaar-${emp.aadhaar_file}`,
-//           });
-//         }
-//       }
-
-//       // PAN File
-//       if (emp.pan_file) {
-//         const panPath = path.join(__dirname, "uploads", "pan", emp.pan_file);
-
-//         if (fs.existsSync(panPath)) {
-//           archive.file(panPath, {
-//             name: `${folderName}/pan-${emp.pan_file}`,
-//           });
-//         }
-//       }
-
-//       // Bank File
-//       if (emp.bank_file) {
-//         const bankPath = path.join(__dirname, "uploads", "bank", emp.bank_file);
-
-//         if (fs.existsSync(bankPath)) {
-//           archive.file(bankPath, {
-//             name: `${folderName}/bank-${emp.bank_file}`,
-//           });
-//         }
-//       }
-//     });
-
-//     archive.finalize();
-//   });
-// });
-
-
-// ======================================================
-// DOWNLOAD ALL EMPLOYEE FILES
-// ======================================================
-
 app.get("/api/download-all-personal-files", (req, res) => {
   const sql = `
     SELECT *
@@ -2529,20 +2285,14 @@ NEXT APPRAISAL : ${emp.next_appraisal_date || "-"}
           emp.aadhaar_file,
         );
 
-        console.log(
-          `[${emp.emp_id}] Aadhaar:`,
-          aadhaarPath,
-        );
+        console.log(`[${emp.emp_id}] Aadhaar:`, aadhaarPath);
 
         if (fs.existsSync(aadhaarPath)) {
           archive.file(aadhaarPath, {
             name: `${folderName}/aadhaar-${emp.aadhaar_file}`,
           });
         } else {
-          console.log(
-            `[${emp.emp_id}] Aadhaar file not found:`,
-            aadhaarPath,
-          );
+          console.log(`[${emp.emp_id}] Aadhaar file not found:`, aadhaarPath);
         }
       }
 
@@ -2551,27 +2301,16 @@ NEXT APPRAISAL : ${emp.next_appraisal_date || "-"}
       // ==================================================
 
       if (emp.pan_file) {
-        const panPath = path.join(
-          __dirname,
-          "uploads",
-          "pan",
-          emp.pan_file,
-        );
+        const panPath = path.join(__dirname, "uploads", "pan", emp.pan_file);
 
-        console.log(
-          `[${emp.emp_id}] PAN:`,
-          panPath,
-        );
+        console.log(`[${emp.emp_id}] PAN:`, panPath);
 
         if (fs.existsSync(panPath)) {
           archive.file(panPath, {
             name: `${folderName}/pan-${emp.pan_file}`,
           });
         } else {
-          console.log(
-            `[${emp.emp_id}] PAN file not found:`,
-            panPath,
-          );
+          console.log(`[${emp.emp_id}] PAN file not found:`, panPath);
         }
       }
 
@@ -2580,27 +2319,16 @@ NEXT APPRAISAL : ${emp.next_appraisal_date || "-"}
       // ==================================================
 
       if (emp.bank_file) {
-        const bankPath = path.join(
-          __dirname,
-          "uploads",
-          "bank",
-          emp.bank_file,
-        );
+        const bankPath = path.join(__dirname, "uploads", "bank", emp.bank_file);
 
-        console.log(
-          `[${emp.emp_id}] Bank:`,
-          bankPath,
-        );
+        console.log(`[${emp.emp_id}] Bank:`, bankPath);
 
         if (fs.existsSync(bankPath)) {
           archive.file(bankPath, {
             name: `${folderName}/bank-${emp.bank_file}`,
           });
         } else {
-          console.log(
-            `[${emp.emp_id}] Bank file not found:`,
-            bankPath,
-          );
+          console.log(`[${emp.emp_id}] Bank file not found:`, bankPath);
         }
       }
     });
@@ -2769,24 +2497,6 @@ app.post("/api/payslips/save", async (req, res) => {
   }
 });
 
-// Proxy payslip update
-// app.put("/api/payslips/:id", async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const targetUrl = `${PAYSLIP_API_URL}${req.originalUrl}`;
-//     console.log(`🔄 Proxying to: ${targetUrl}`);
-
-//     const response = await axios.put(targetUrl, req.body);
-//     res.status(response.status).json(response.data);
-//   } catch (error) {
-//     console.error("❌ Payslip update error:", error.message);
-//     res.status(error.response?.status || 500).json({
-//       error: "Failed to update payslip",
-//       details: error.message,
-//     });
-//   }
-// });
-
 app.put("/api/payslips/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -2914,8 +2624,6 @@ app.get("/api/reports/employee/:emp_id", async (req, res) => {
   }
 });
 
-
-
 // Proxy payment summary PDF
 app.post("/api/payment-summary/pdf", async (req, res) => {
   try {
@@ -2969,7 +2677,7 @@ app.use((req, res) => {
 });
 
 // ================= START SERVER =================
-const PORT = process.env.BACKEND_PORT || 7017;
+const PORT = process.env.BACKEND_PORT || 8017;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });

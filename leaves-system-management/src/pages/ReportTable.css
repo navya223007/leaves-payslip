@@ -164,6 +164,7 @@
 
 .reportsTableCard {
   width: 100%;
+  max-width: 100%;
 
   background: white;
 
@@ -172,15 +173,7 @@
 
   box-shadow: 0 3px 12px rgba(15, 23, 42, 0.06);
 
-  /*
-     IMPORTANT:
-     Do NOT set height.
-     Do NOT set max-height.
-     Do NOT set overflow-y.
-  */
-
   overflow: hidden;
-
   box-sizing: border-box;
 }
 
@@ -223,17 +216,9 @@
 
 .reportsTable {
   width: 100%;
-
-  /*
-     IMPORTANT:
-     Do NOT use 1200px/1250px minimum here.
-     Let the table fit the screen.
-  */
-
-  min-width: 100%;
+  min-width: 1250px;
 
   border-collapse: collapse;
-
   table-layout: fixed;
 
   font-size: 13px;
@@ -290,7 +275,9 @@
 
 .reportsTable tbody tr:hover td {
   background: #f8fafc;
-} /* =========================================================
+}
+
+/* =========================================================
    REASON TYPE + DESCRIPTION
 ========================================================= */
 
@@ -428,31 +415,109 @@
 
 .dateCell {
   font-size: 12px !important;
-
-  white-space: normal !important;
-
+  white-space: nowrap !important;
   line-height: 1.3;
 }
 
 /* =========================================================
-   REASON
+   REASON + REJECT REASON
 
-   IMPORTANT:
-   Give Reason enough space.
+   Fixed width + Read More / Read Less
 ========================================================= */
 
 .reasonCell {
-  width: 11%;
+  width: 180px;
+  min-width: 180px;
+  max-width: 180px;
 
+  vertical-align: top;
   text-align: left !important;
 
-  white-space: normal !important;
+  white-space: normal;
+  overflow: hidden;
+}
 
-  overflow-wrap: anywhere !important;
+.reasonCellContent {
+  width: 100%;
+  max-width: 180px;
 
-  word-break: break-word !important;
+  overflow: hidden;
+}
 
-  line-height: 1.35;
+.reasonText,
+.rejectReason {
+  width: 100%;
+  max-width: 180px;
+
+  font-size: 13px;
+  line-height: 18px;
+
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* =========================================================
+   SMALL REASON PREVIEW
+========================================================= */
+
+.reasonText:not(.expanded),
+.rejectReason:not(.expanded) {
+  max-height: 36px;
+  overflow: hidden;
+}
+
+/* =========================================================
+   FULL REASON TEXT
+========================================================= */
+
+.reasonText.expanded,
+.rejectReason.expanded {
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: normal;
+}
+
+/* =========================================================
+   READ MORE / READ LESS
+========================================================= */
+
+.readMoreButton {
+  display: inline-block;
+
+  margin-top: 4px;
+  padding: 0;
+
+  border: none;
+  background: transparent;
+
+  cursor: pointer;
+
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+
+  text-decoration: underline;
+}
+
+.readMoreButton:hover {
+  opacity: 0.7;
+}
+
+/* =========================================================
+   MULTIPLE LEAVE DATES
+========================================================= */
+
+.multipleLeaveDates {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  white-space: nowrap;
+}
+
+.multipleLeaveDates div {
+  font-size: 13px;
+  line-height: 18px;
 }
 
 /* =========================================================
@@ -581,29 +646,6 @@
 }
 
 /* =========================================================
-   RESPONSIVE
-========================================================= */
-
-@media (max-width: 1100px) {
-  .reportsTable {
-    /*
-       At smaller desktop/tablet sizes,
-       horizontal scrolling is allowed ONLY
-       inside tableScroll.
-    */
-
-    min-width: 1050px;
-
-    table-layout: auto;
-  }
-
-  .reportsTable th,
-  .reportsTable td {
-    white-space: normal;
-  }
-}
-
-/* =========================================================
    MOBILE
 ========================================================= */
 
@@ -653,7 +695,7 @@
   }
 
   .reportsTable {
-    min-width: 1050px;
+    min-width: 1150px;
 
     font-size: 13px;
   }
@@ -687,7 +729,7 @@
   }
 
   .reportsTable {
-    min-width: 1000px;
+    min-width: 1100px;
   }
 
   .pagination button {
