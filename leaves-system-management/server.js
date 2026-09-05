@@ -63,21 +63,27 @@ app.use((req, res, next) => {
 });
 
 // ================= DB CONNECTION =================
-const db = mysql.createConnection({
+// ================= DB CONNECTION =================
+const db = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
+
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
 });
 
-db.connect((err) => {
+// Test database connection
+db.query("SELECT 1", (err) => {
   if (err) {
-    console.log("❌ DB Connection Error:", err);
+    console.error("❌ DB Connection Error:", err);
     return;
   }
-  console.log("✅ MySQL Connected");
-});
 
+  console.log("✅ MySQL Connection Pool Ready");
+});
 // ================= MAIL CONFIG =================
 const transporter = nodemailer.createTransport({
   host: process.env.MAIL_HOST,
@@ -688,10 +694,23 @@ app.delete("/employees/:id", verifyToken, (req, res) => {
 
 // ================= CHANGE PASSWORD =================
 
+// ================= CHANGE PASSWORD - EMPLOYEE ONLY =================
+
 app.put("/api/change-password", verifyToken, (req, res) => {
   const { currentPassword, newPassword, confirmPassword } = req.body;
 
-  // Validation
+  console.log("🔐 Change Password Request:", {
+    emp_id: req.user.emp_id,
+    userId: req.user.id,
+    role: req.user.role,
+    hasCurrentPassword: !!currentPassword,
+    hasNewPassword: !!newPassword,
+    hasConfirmPassword: !!confirmPassword,
+    passwordsMatch: newPassword === confirmPassword,
+  });
+
+  // ================= VALIDATION =================
+
   if (!currentPassword || !newPassword || !confirmPassword) {
     return res.status(400).json({
       message: "All fields are required",
@@ -704,12 +723,21 @@ app.put("/api/change-password", verifyToken, (req, res) => {
     });
   }
 
-  // Get logged-in user
+  // ================= GET LOGGED-IN USER =================
+
   db.query(
-    "SELECT id, password FROM users WHERE id = ?",
+    "SELECT id, emp_id, password, role FROM users WHERE id = ?",
     [req.user.id],
     (err, result) => {
+      console.log("🔎 Change Password DB Result:", {
+        dbError: err ? err.message : null,
+        resultCount: result ? result.length : 0,
+        userId: req.user.id,
+      });
+
       if (err) {
+        console.error("❌ Change Password DB Error:", err);
+
         return res.status(500).json({
           message: "Database error",
         });
@@ -723,25 +751,52 @@ app.put("/api/change-password", verifyToken, (req, res) => {
 
       const user = result[0];
 
-      // Verify current password
-      if (user.password.trim() !== currentPassword.trim()) {
+      // ================= VERIFY CURRENT PASSWORD =================
+
+      if (
+        String(user.password || "").trim() !==
+        String(currentPassword || "").trim()
+      ) {
+        console.log("❌ Current password does not match");
+
         return res.status(400).json({
           message: "Current password is incorrect",
         });
       }
 
-      // Update password
+      console.log("✅ Current password matched");
+
+      // ================= UPDATE PASSWORD =================
+
       db.query(
         "UPDATE users SET password = ? WHERE id = ?",
-        [newPassword.trim(), req.user.id],
-        (updateErr) => {
+        [String(newPassword).trim(), req.user.id],
+        (updateErr, updateResult) => {
+          console.log("🔄 Password Update Result:", {
+            updateError: updateErr ? updateErr.message : null,
+            affectedRows: updateResult ? updateResult.affectedRows : 0,
+            userId: req.user.id,
+          });
+
           if (updateErr) {
+            console.error("❌ Password Update Error:", updateErr);
+
             return res.status(500).json({
               message: "Failed to update password",
             });
           }
 
-          res.json({
+          if (!updateResult || updateResult.affectedRows === 0) {
+            return res.status(400).json({
+              message: "Password was not updated",
+            });
+          }
+
+          console.log(
+            `✅ Password updated successfully for user ${req.user.emp_id}`,
+          );
+
+          return res.json({
             message: "Password changed successfully",
           });
         },
@@ -749,6 +804,7 @@ app.put("/api/change-password", verifyToken, (req, res) => {
     },
   );
 });
+
 // ================= SERVER DATE/TIME =================
 
 // ================= LEAVE APIs =================

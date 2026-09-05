@@ -1,0 +1,9 @@
+# DB_HOST=127.0.0.1
+DB_HOST=192.168.88.177
+DB_USER=root
+DB_PASSWORD=Sesgps@123
+# DB_NAME=payslip_replica
+DB_NAME=testing_payslip
+PORT=8016
+JWT_SECRET=mysecret123
+ACCESS_TOKEN_SECRET=mysecret123

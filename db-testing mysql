@@ -1,0 +1,280 @@
+USE leave_system;
+SHOW TABLES;
+
+SHOW CREATE TABLE users;
+SHOW CREATE TABLE daily_status;
+SHOW CREATE TABLE employee_personal_details;
+SHOW CREATE TABLE items_out;
+SHOW CREATE TABLE leaves;
+select *from users;
+
+
+
+USE payslip;
+SHOW TABLES;
+SHOW CREATE TABLE employee;
+SHOW CREATE TABLE employee_earnings;
+SHOW CREATE TABLE holidays;
+SHOW CREATE TABLE payslip;
+SHOW CREATE TABLE users;
+
+
+SHOW CREATE TABLE employee;
+SHOW CREATE TABLE employee_earnings;
+SHOW CREATE TABLE holidays;
+SHOW CREATE TABLE payslip;
+SHOW CREATE TABLE users;
+
+
+show databases;
+
+CREATE DATABASE hrms_leaves_test;
+CREATE DATABASE hrms_payslip;
+CREATE DATABASE hrms_payslip_testing;
+
+USE hrms_leaves_test;
+
+CREATE TABLE `users` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `emp_id` varchar(20) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `email` varchar(100) NOT NULL,
+  `password` varchar(255) NOT NULL,
+  `role` enum('admin','employee') DEFAULT 'employee',
+  `department` varchar(50) DEFAULT NULL,
+  `subDepartment` varchar(50) DEFAULT NULL,
+  `employeeType` varchar(50) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `designation` varchar(20) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `emp_id` (`emp_id`),
+  UNIQUE KEY `email` (`email`)
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `daily_status` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `emp_id` varchar(20) NOT NULL,
+  `project_name` varchar(150) DEFAULT NULL,
+  `subtask` text,
+  `assigned_by` varchar(255) DEFAULT NULL,
+  `status_date` date DEFAULT NULL,
+  `status_month` int DEFAULT NULL,
+  `status_year` int DEFAULT NULL,
+  `status` varchar(20) DEFAULT 'pending',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `admin_comment` text,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_emp_date` (`emp_id`,`status_date`),
+  KEY `emp_id` (`emp_id`),
+  CONSTRAINT `daily_status_ibfk_1`
+    FOREIGN KEY (`emp_id`) REFERENCES `users` (`emp_id`)
+    ON DELETE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_0900_ai_ci;
+
+
+
+CREATE TABLE `employee_personal_details` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `emp_id` varchar(20) NOT NULL,
+  `emp_name` varchar(100) DEFAULT NULL,
+  `aadhaar_number` varchar(20) DEFAULT NULL,
+  `pan_number` varchar(20) DEFAULT NULL,
+  `date_of_birth` date DEFAULT NULL,
+  `date_of_joining` date DEFAULT NULL,
+  `bank_account_number` varchar(30) DEFAULT NULL,
+  `ifsc_code` varchar(20) DEFAULT NULL,
+  `aadhaar_file` varchar(255) DEFAULT NULL,
+  `pan_file` varchar(255) DEFAULT NULL,
+  `bank_file` varchar(255) DEFAULT NULL,
+  `last_appraisal_date` date DEFAULT NULL,
+  `next_appraisal_date` date DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `emp_id` (`emp_id`),
+  CONSTRAINT `employee_personal_details_ibfk_1`
+    FOREIGN KEY (`emp_id`) REFERENCES `users` (`emp_id`)
+    ON DELETE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_0900_ai_ci;
+
+
+
+CREATE TABLE `items_out` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `item_id` int DEFAULT NULL,
+  `serial_number` varchar(50) DEFAULT NULL,
+  `category` varchar(100) DEFAULT NULL,
+  `subcategory` varchar(100) DEFAULT NULL,
+  `part_description` text,
+  `value` varchar(100) DEFAULT NULL,
+  `package` varchar(50) DEFAULT NULL,
+  `project_name` varchar(255) DEFAULT NULL,
+  `employee_name` varchar(255) DEFAULT NULL,
+  `purpose` text,
+  `quantity` int DEFAULT NULL,
+  `date_out` date DEFAULT NULL,
+  `part_number` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_0900_ai_ci;
+
+
+
+CREATE TABLE `leaves` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `emp_id` varchar(50) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `department` varchar(100) DEFAULT NULL,
+  `leave_type` varchar(20) DEFAULT NULL,
+  `sub_type` varchar(20) DEFAULT NULL,
+  `date` date DEFAULT NULL,
+  `selected_dates` json DEFAULT NULL,
+  `session` varchar(20) DEFAULT NULL,
+  `reason_type` varchar(20) DEFAULT NULL,
+  `reason_text` text,
+  `is_emergency` tinyint(1) DEFAULT '0',
+  `emergency_mail_sent` tinyint(1) DEFAULT '0',
+  `reminder_morning_sent` tinyint(1) DEFAULT '0',
+  `reminder_afternoon_sent` tinyint(1) DEFAULT '0',
+  `reminder_night_sent` tinyint(1) DEFAULT '0',
+  `reminder_leaveday_sent` tinyint(1) DEFAULT '0',
+  `status` varchar(20) DEFAULT 'pending',
+  `reject_reason` text,
+  `employee_checked` tinyint DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `action_time` datetime DEFAULT NULL,
+  `emergency_mail_time` datetime DEFAULT NULL,
+  `reminder_morning_time` datetime DEFAULT NULL,
+  `reminder_afternoon_time` datetime DEFAULT NULL,
+  `reminder_night_time` datetime DEFAULT NULL,
+  `reminder_leaveday_time` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_0900_ai_ci;
+
+
+
+use hrms_payslip;
+show tables;
+
+CREATE TABLE `users` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `username` varchar(50) NOT NULL,
+  `password` varchar(100) NOT NULL,
+  `role` varchar(20) NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `username` (`username`)
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_0900_ai_ci;
+
+USE hrms_payslip;
+
+CREATE TABLE `employee` (
+  `emp_id` varchar(20) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `designation` varchar(100) NOT NULL,
+  `date_of_joining` date NOT NULL,
+  `PAN` varchar(20) NOT NULL,
+  `basic_salary` decimal(10,2) NOT NULL,
+  `transport_allowance` decimal(10,2) DEFAULT '0.00',
+  `internet_allowance` decimal(10,2) DEFAULT '0.00',
+  `medical_allowance` decimal(10,2) DEFAULT '0.00',
+  `professional_tax` decimal(10,2) DEFAULT '0.00',
+  `bank_account_number` varchar(30) NOT NULL,
+  `IFSC_code` varchar(20) NOT NULL,
+  `bank_name` varchar(100) NOT NULL,
+  `pf_applicable` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `house_rent_allowence` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`emp_id`),
+  UNIQUE KEY `PAN` (`PAN`)
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_0900_ai_ci;
+
+
+
+CREATE TABLE `employee_earnings` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `emp_id` varchar(20) DEFAULT NULL,
+  `basic_salary` decimal(10,2) NOT NULL,
+  `house_rent_allowence` decimal(10,2) DEFAULT '0.00',
+  `transport_allowance` decimal(10,2) DEFAULT '0.00',
+  `internet_allowance` decimal(10,2) DEFAULT '0.00',
+  `telephone_allowance` decimal(10,2) DEFAULT '0.00',
+  `medical_allowance` decimal(10,2) DEFAULT '0.00',
+  `employer_pf_contribution` decimal(10,2) DEFAULT '0.00',
+  `performance_bonus` decimal(10,2) DEFAULT '0.00',
+  `arrears` decimal(10,2) DEFAULT '0.00',
+  `effective_from` date NOT NULL,
+  `effective_to` date DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_employee_effective` (`emp_id`, `effective_from`),
+  CONSTRAINT `employee_earnings_ibfk_1`
+    FOREIGN KEY (`emp_id`)
+    REFERENCES `employee` (`emp_id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_0900_ai_ci;
+
+
+CREATE TABLE `holidays` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `holiday_date` date NOT NULL,
+  `holiday_name` varchar(100) DEFAULT NULL,
+  `year` int NOT NULL,
+  `month` int NOT NULL,
+  `day_of_week` varchar(20) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_holiday` (`holiday_date`)
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_0900_ai_ci;
+
+USE hrms_payslip;
+
+CREATE TABLE `payslip` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `emp_id` varchar(20) DEFAULT NULL,
+  `salary_month` int NOT NULL,
+  `salary_year` int NOT NULL,
+  `advance_salary` decimal(10,2) DEFAULT '0.00',
+  `paid_days` int NOT NULL,
+  `holidays` int DEFAULT '0',
+  `leaves` int DEFAULT '0',
+  `gross_salary` decimal(10,2) NOT NULL,
+  `total_deductions` decimal(10,2) NOT NULL,
+  `net_salary` decimal(10,2) NOT NULL,
+  `pf_deduction` decimal(10,2) NOT NULL,
+  `professional_tax_deduction` decimal(10,2) NOT NULL,
+  `performance_bonus` decimal(10,2) DEFAULT '0.00',
+  `arrears` decimal(10,2) DEFAULT '0.00',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_employee_month_year` (`emp_id`,`salary_month`,`salary_year`),
+  CONSTRAINT `payslip_ibfk_1`
+    FOREIGN KEY (`emp_id`)
+    REFERENCES `employee` (`emp_id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_0900_ai_ci;
+
+
+
+CREATE DATABASE hrms_leaves_pvt_test;
+use hrms_leaves_pvt_test;

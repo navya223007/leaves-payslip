@@ -6,6 +6,8 @@ function ChangePassword() {
   const [showOld, setShowOld] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const [formData, setFormData] = useState({
     oldPassword: "",
@@ -22,28 +24,27 @@ function ChangePassword() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Clear old messages
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    // Check password mismatch before API call
+    if (formData.newPassword !== formData.confirmPassword) {
+      setErrorMessage("New Password and Confirm Password do not match");
+      return;
+    }
+
     try {
       const response = await api.put("/api/change-password", {
-        method: "PUT",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          currentPassword: formData.oldPassword,
-          newPassword: formData.newPassword,
-          confirmPassword: formData.confirmPassword,
-        }),
+        currentPassword: formData.oldPassword,
+        newPassword: formData.newPassword,
+        confirmPassword: formData.confirmPassword,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        alert(data.message);
-        return;
-      }
-
-      alert(data.message);
+      // Success
+      setSuccessMessage(
+        response.data?.message || "Password changed successfully",
+      );
 
       setFormData({
         oldPassword: "",
@@ -51,8 +52,14 @@ function ChangePassword() {
         confirmPassword: "",
       });
     } catch (error) {
-      console.error(error);
-      alert("Something went wrong");
+      console.error("Change password error:", error);
+
+      // Show exact backend error message
+      const message =
+        error.response?.data?.message ||
+        "Unable to change password. Please try again.";
+
+      setErrorMessage(message);
     }
   };
 
@@ -162,6 +169,33 @@ function ChangePassword() {
                     Update Password
                   </button>
                 </form>
+                {errorMessage && (
+                  <div
+                    className="alert alert-danger"
+                    role="alert"
+                    style={{
+                      borderRadius: "10px",
+                      fontWeight: "500",
+                      marginBottom: "20px",
+                    }}
+                  >
+                    {errorMessage}
+                  </div>
+                )}
+
+                {successMessage && (
+                  <div
+                    className="alert alert-success"
+                    role="alert"
+                    style={{
+                      borderRadius: "10px",
+                      fontWeight: "500",
+                      marginBottom: "20px",
+                    }}
+                  >
+                    {successMessage}
+                  </div>
+                )}
               </div>
             </div>
           </div>
