@@ -1747,6 +1747,10 @@ app.get("/api/employee-basic/:emp_id", (req, res) => {
 // ======================================================
 // SAVE EMPLOYEE PERSONAL DETAILS
 // ======================================================
+// ======================================================
+// SAVE EMPLOYEE PERSONAL DETAILS
+// ======================================================
+
 app.post(
   "/api/personal-details",
   upload.fields([
@@ -1761,7 +1765,9 @@ app.post(
       console.log("BODY DATA:", d);
       console.log("FILES:", req.files);
 
+      // ======================================================
       // FORMAT DATES
+      // ======================================================
       const formattedDOB = formatDate(d.date_of_birth);
       const formattedDOJ = formatDate(d.date_of_joining);
 
@@ -1771,8 +1777,11 @@ app.post(
         });
       }
 
-      const joiningDate = new Date(formattedDOJ);
-      const today = new Date();
+      // ======================================================
+      // DATE OF JOINING VALIDATION
+      // SERVER DATE IS THE SOURCE OF TRUTH
+      // ======================================================
+      const joiningDate = new Date(`${formattedDOJ}T00:00:00`);
 
       if (isNaN(joiningDate.getTime())) {
         return res.status(400).json({
@@ -1780,17 +1789,47 @@ app.post(
         });
       }
 
+      const today = new Date();
+
+      // Compare date only - ignore time
+      const joiningDateOnly = new Date(
+        joiningDate.getFullYear(),
+        joiningDate.getMonth(),
+        joiningDate.getDate(),
+      );
+
+      const todayOnly = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+      );
+
+      console.log("SERVER DATE:", todayOnly);
+      console.log("JOINING DATE:", joiningDateOnly);
+
+      // 🚫 FUTURE DOJ NOT ALLOWED
+      if (joiningDateOnly > todayOnly) {
+        return res.status(400).json({
+          message: "Date Of Joining cannot be a future date",
+        });
+      }
+
+      // ======================================================
       // APPRAISAL LOGIC
+      // ======================================================
       let lastAppraisal = new Date(joiningDate);
 
-      while (lastAppraisal <= today) {
+      while (lastAppraisal <= todayOnly) {
         lastAppraisal.setFullYear(lastAppraisal.getFullYear() + 1);
       }
 
       const nextAppraisal = new Date(lastAppraisal);
+
       lastAppraisal.setFullYear(lastAppraisal.getFullYear() - 1);
 
+      // ======================================================
       // FINAL MYSQL SAFE DATES
+      // ======================================================
       const lastAppraisalDate = toMySQLDate(lastAppraisal);
       const nextAppraisalDate = toMySQLDate(nextAppraisal);
 
@@ -1837,8 +1876,7 @@ app.post(
             console.log("CODE:", err.code);
 
             return res.status(500).json({
-              message: err.sqlMessage,
-              code: err.code,
+              message: "Unable to save personal details",
             });
           }
 
@@ -1853,12 +1891,10 @@ app.post(
 
       return res.status(500).json({
         message: "Server Error",
-        error: error.message,
       });
     }
   },
 );
-
 // ======================================================
 // GET ALL EMPLOYEE PERSONAL DETAILS
 // ======================================================
@@ -1936,111 +1972,224 @@ app.put(
     { name: "bank_file", maxCount: 1 },
   ]),
   (req, res) => {
-    const d = req.body;
+    try {
+      const d = req.body;
 
-    const getOldSql = "SELECT * FROM employee_personal_details WHERE emp_id=?";
+      const getOldSql =
+        "SELECT * FROM employee_personal_details WHERE emp_id=?";
 
-    db.query(getOldSql, [req.params.emp_id], (err, result) => {
-      if (err) return res.status(500).json(err);
+      db.query(getOldSql, [req.params.emp_id], (err, result) => {
+        if (err) {
+          console.log("GET OLD EMPLOYEE ERROR:", err);
 
-      if (result.length === 0) {
-        return res.status(404).json({ message: "Employee not found" });
-      }
-
-      const old = result[0];
-
-      //   SAFE FILE HANDLING
-      const aadhaarFile =
-        req.files?.aadhaar_file?.[0]?.filename || old?.aadhaar_file || null;
-
-      const panFile =
-        req.files?.pan_file?.[0]?.filename || old?.pan_file || null;
-
-      const bankFile =
-        req.files?.bank_file?.[0]?.filename || old?.bank_file || null;
-
-      //   FIX DATE FORMAT ISSUE (IMPORTANT)
-      const convertDate = (dateStr) => {
-        if (!dateStr) return null;
-
-        // already yyyy-mm-dd
-        if (dateStr.includes("-")) {
-          return dateStr;
+          return res.status(500).json({
+            message: "Unable to fetch employee details",
+          });
         }
 
-        const [dd, mm, yyyy] = dateStr.split("/");
+        if (result.length === 0) {
+          return res.status(404).json({
+            message: "Employee not found",
+          });
+        }
 
-        return `${yyyy}-${mm}-${dd}`;
-      };
+        const old = result[0];
 
-      const joiningDate = new Date(convertDate(d.date_of_joining));
+        // ======================================================
+        // SAFE FILE HANDLING
+        // ======================================================
+        const aadhaarFile =
+          req.files?.aadhaar_file?.[0]?.filename || old?.aadhaar_file || null;
 
-      if (isNaN(joiningDate.getTime())) {
-        return res.status(400).json({
-          message: "Invalid Date of Joining",
-        });
-      }
+        const panFile =
+          req.files?.pan_file?.[0]?.filename || old?.pan_file || null;
 
-      const today = new Date();
+        const bankFile =
+          req.files?.bank_file?.[0]?.filename || old?.bank_file || null;
 
-      let lastAppraisal = new Date(joiningDate);
+        // ======================================================
+        // DATE CONVERSION
+        // Supports:
+        // DD/MM/YYYY
+        // YYYY-MM-DD
+        // ======================================================
+        const convertDate = (dateStr) => {
+          if (!dateStr) return null;
 
-      while (lastAppraisal <= today) {
-        lastAppraisal.setFullYear(lastAppraisal.getFullYear() + 1);
-      }
+          dateStr = String(dateStr).trim();
 
-      const nextAppraisal = new Date(lastAppraisal);
-      lastAppraisal.setFullYear(lastAppraisal.getFullYear() - 1);
-
-      const sql = `
-        UPDATE employee_personal_details
-        SET
-          emp_name=?,
-          aadhaar_number=?,
-          pan_number=?,
-          date_of_birth=?,
-          date_of_joining=?,
-          bank_account_number=?,
-          ifsc_code=?,
-          aadhaar_file=?,
-          pan_file=?,
-          bank_file=?,
-          last_appraisal_date=?,
-          next_appraisal_date=?
-        WHERE emp_id=?
-      `;
-
-      db.query(
-        sql,
-        [
-          d.emp_name,
-          d.aadhaar_number || null,
-          d.pan_number || null,
-          convertDate(d.date_of_birth),
-          convertDate(d.date_of_joining),
-          d.bank_account_number || null,
-          d.ifsc_code || null,
-          aadhaarFile,
-          panFile,
-          bankFile,
-          lastAppraisal,
-          nextAppraisal,
-          req.params.emp_id,
-        ],
-        (err2) => {
-          if (err2) {
-            console.log("SQL ERROR:", err2.sqlMessage);
-            return res.status(500).json({
-              message: err2.sqlMessage,
-            });
+          // Already YYYY-MM-DD
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            return dateStr;
           }
 
-          return res.json({
-            message: "Updated Successfully",
+          // DD/MM/YYYY
+          if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+            const [dd, mm, yyyy] = dateStr.split("/");
+
+            return `${yyyy}-${mm}-${dd}`;
+          }
+
+          return null;
+        };
+
+        // ======================================================
+        // FORMAT DOB
+        // ======================================================
+        const formattedDOB = convertDate(d.date_of_birth);
+
+        // ======================================================
+        // FORMAT DOJ
+        // ======================================================
+        const formattedDOJ = convertDate(d.date_of_joining);
+
+        if (!formattedDOJ) {
+          return res.status(400).json({
+            message: "Invalid Date of Joining",
           });
-        },
-      );
-    });
+        }
+
+        // ======================================================
+        // CREATE JOINING DATE
+        // IMPORTANT:
+        // Add T00:00:00 so comparison is date-only.
+        // ======================================================
+        const joiningDate = new Date(`${formattedDOJ}T00:00:00`);
+
+        if (isNaN(joiningDate.getTime())) {
+          return res.status(400).json({
+            message: "Invalid Date of Joining",
+          });
+        }
+
+        // ======================================================
+        // SERVER CURRENT DATE
+        // ======================================================
+        const today = new Date();
+
+        // Remove time from both dates
+        const joiningDateOnly = new Date(
+          joiningDate.getFullYear(),
+          joiningDate.getMonth(),
+          joiningDate.getDate(),
+        );
+
+        const todayOnly = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate(),
+        );
+
+        console.log(
+          "SERVER CURRENT DATE:",
+          todayOnly.toISOString().split("T")[0],
+        );
+
+        console.log(
+          "EMPLOYEE JOINING DATE:",
+          joiningDateOnly.toISOString().split("T")[0],
+        );
+
+        // ======================================================
+        // 🚫 FUTURE DATE OF JOINING NOT ALLOWED
+        // ======================================================
+        if (joiningDateOnly > todayOnly) {
+          return res.status(400).json({
+            message: "Date Of Joining cannot be a future date",
+          });
+        }
+
+        // ======================================================
+        // APPRAISAL LOGIC
+        // EXISTING LOGIC PRESERVED
+        // ======================================================
+        let lastAppraisal = new Date(joiningDate);
+
+        while (lastAppraisal <= todayOnly) {
+          lastAppraisal.setFullYear(lastAppraisal.getFullYear() + 1);
+        }
+
+        const nextAppraisal = new Date(lastAppraisal);
+
+        lastAppraisal.setFullYear(lastAppraisal.getFullYear() - 1);
+
+        // ======================================================
+        // CONVERT APPRAISAL DATES TO MYSQL FORMAT
+        // ======================================================
+        const lastAppraisalDate = toMySQLDate(lastAppraisal);
+
+        const nextAppraisalDate = toMySQLDate(nextAppraisal);
+
+        // ======================================================
+        // UPDATE SQL
+        // ======================================================
+        const sql = `
+          UPDATE employee_personal_details
+          SET
+            emp_name=?,
+            aadhaar_number=?,
+            pan_number=?,
+            date_of_birth=?,
+            date_of_joining=?,
+            bank_account_number=?,
+            ifsc_code=?,
+            aadhaar_file=?,
+            pan_file=?,
+            bank_file=?,
+            last_appraisal_date=?,
+            next_appraisal_date=?
+          WHERE emp_id=?
+        `;
+
+        // ======================================================
+        // UPDATE DATABASE
+        // ======================================================
+        db.query(
+          sql,
+          [
+            d.emp_name,
+            d.aadhaar_number || null,
+            d.pan_number || null,
+
+            formattedDOB,
+
+            formattedDOJ,
+
+            d.bank_account_number || null,
+            d.ifsc_code || null,
+
+            aadhaarFile,
+            panFile,
+            bankFile,
+
+            lastAppraisalDate,
+            nextAppraisalDate,
+
+            req.params.emp_id,
+          ],
+          (err2) => {
+            if (err2) {
+              console.log("SQL ERROR:", err2.sqlMessage);
+              console.log("SQL CODE:", err2.code);
+
+              return res.status(500).json({
+                message: "Unable to update personal details",
+              });
+            }
+
+            return res.json({
+              message: "Updated Successfully",
+            });
+          },
+        );
+      });
+    } catch (error) {
+      console.log("SERVER ERROR:", error);
+
+      return res.status(500).json({
+        message: "Server Error",
+      });
+    }
   },
 );
 // ======================================================

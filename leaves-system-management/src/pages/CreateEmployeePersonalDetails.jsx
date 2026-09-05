@@ -156,6 +156,9 @@ function CreateEmployeePersonalDetails() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    console.log("========== CREATE HANDLE CHANGE ==========");
+    console.log("Field:", name);
+    console.log("Original Value:", value);
 
     let updatedValue = value;
 
@@ -196,7 +199,8 @@ function CreateEmployeePersonalDetails() {
         .replace(/[^A-Z0-9]/g, "")
         .slice(0, 11);
     }
-
+    console.log("Updated Value:", updatedValue);
+    console.log("=========================================");
     setFormData((prev) => ({
       ...prev,
       [name]: updatedValue,
@@ -315,10 +319,30 @@ function CreateEmployeePersonalDetails() {
      SUBMIT
   ====================================================== */
 
+  // ======================================================
+  // SUBMIT
+  // ======================================================
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    console.log("========== CREATE SUBMIT DEBUG ==========");
+    console.log("Form Data:", formData);
+    console.log("Employee ID:", formData.emp_id);
+    console.log("Employee Name:", formData.emp_name);
+    console.log("Date Of Birth:", formData.date_of_birth);
+    console.log("Date Of Joining:", formData.date_of_joining);
+    console.log("Aadhaar:", formData.aadhaar_number);
+    console.log("PAN:", formData.pan_number);
+    console.log("Bank Account:", formData.bank_account_number);
+    console.log("IFSC:", formData.ifsc_code);
+    console.log("Files:", files);
+    console.log("==========================================");
+
     let newErrors = {};
+
+    // ======================================================
+    // REQUIRED VALIDATIONS
+    // ======================================================
 
     if (!formData.emp_name.trim()) {
       newErrors.emp_name = "Employee Name is required";
@@ -336,9 +360,28 @@ function CreateEmployeePersonalDetails() {
       newErrors.date_of_joining = "Date Of Joining is required";
     }
 
+    // ======================================================
+    // DATE FORMAT VALIDATION
+    // ======================================================
+    const dateRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/;
+
+    if (formData.date_of_joining && !dateRegex.test(formData.date_of_joining)) {
+      newErrors.date_of_joining = "Date format should be DD/MM/YYYY";
+    }
+
+    if (formData.date_of_birth && !dateRegex.test(formData.date_of_birth)) {
+      newErrors.date_of_birth = "Date format should be DD/MM/YYYY";
+    }
+
     setErrors(newErrors);
 
-    if (Object.keys(newErrors).length > 0) return;
+    if (Object.keys(newErrors).length > 0) {
+      return;
+    }
+
+    // ======================================================
+    // API SUBMIT
+    // ======================================================
 
     try {
       setLoading(true);
@@ -362,17 +405,32 @@ function CreateEmployeePersonalDetails() {
       });
 
       alert("Saved Successfully");
-
       navigate("/admin/employee-details-personal/list");
     } catch (err) {
-      console.log(err);
+      console.log("========== CREATE API ERROR ==========");
+      console.log("ERROR OBJECT:", err);
+      console.log("STATUS:", err?.response?.status);
+      console.log("DATA:", err?.response?.data);
+      console.log("MESSAGE:", err?.response?.data?.message);
+      console.log("ERROR MESSAGE:", err?.message);
+      console.log("======================================");
 
-      alert("Error saving employee");
+      const backendMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Unable to save employee details";
+
+      setErrors((prev) => ({
+        ...prev,
+        date_of_joining: backendMessage,
+      }));
+
+      return;
     } finally {
       setLoading(false);
     }
   };
-
   return (
     <>
       <div className="pageWrapper">

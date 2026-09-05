@@ -1,6 +1,9 @@
 import React, { useEffect, useState, memo } from "react";
+
 import api from "../api";
+
 import { useNavigate, useParams } from "react-router-dom";
+
 import {
   FaIdCard,
   FaUniversity,
@@ -90,7 +93,6 @@ const FileField = memo(({ label, name, onChange, preview }) => (
 
 function EditEmployeePersonalDetails() {
   const { emp_id } = useParams();
-
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
@@ -107,10 +109,59 @@ function EditEmployeePersonalDetails() {
   });
 
   const [files, setFiles] = useState({});
-
   const [preview, setPreview] = useState({});
-
   const [errors, setErrors] = useState({});
+
+  /* ================= DATE FORMAT FOR API ================= */
+
+  const convertDateForAPI = (dateStr) => {
+    if (!dateStr) return "";
+
+    // Already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return dateStr;
+    }
+
+    // DD/MM/YYYY → YYYY-MM-DD
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+      const [dd, mm, yyyy] = dateStr.split("/");
+
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    return dateStr;
+  };
+
+  /* ================= DATE FORMAT FOR DISPLAY ================= */
+
+  const formatDate = (date) => {
+    if (!date) return "";
+
+    // Already DD/MM/YYYY
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
+      return date;
+    }
+
+    // MySQL YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const [yyyy, mm, dd] = date.split("-");
+
+      return `${dd}/${mm}/${yyyy}`;
+    }
+
+    // Fallback
+    const d = new Date(date);
+
+    if (isNaN(d.getTime())) {
+      return "";
+    }
+
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+
+    return `${day}/${month}/${year}`;
+  };
 
   /* ================= HANDLE INPUT ================= */
 
@@ -118,7 +169,6 @@ function EditEmployeePersonalDetails() {
     const { name, value } = e.target;
 
     let updatedValue = value;
-
     let newErrors = { ...errors };
 
     /* ================= DATE ================= */
@@ -137,6 +187,7 @@ function EditEmployeePersonalDetails() {
         updatedValue = updatedValue.slice(0, 2) + "/" + updatedValue.slice(2);
       }
 
+      // ✅ Correct DD/MM/YYYY validation
       const dateRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/;
 
       if (!updatedValue.trim()) {
@@ -219,11 +270,10 @@ function EditEmployeePersonalDetails() {
 
     setErrors(newErrors);
   };
-
   /* ================= FILE ================= */
+
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-
     const name = e.target.name;
 
     if (!file) return;
@@ -261,14 +311,83 @@ function EditEmployeePersonalDetails() {
   const handleUpdate = async (e) => {
     e.preventDefault();
 
+    // ================= VALIDATION =================
+
+    let newErrors = {};
+
+    if (!formData.emp_name?.trim()) {
+      newErrors.emp_name = "Required";
+    }
+
+    if (!formData.emp_id?.trim()) {
+      newErrors.emp_id = "Required";
+    }
+
+    const dateRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/;
+
+    if (!formData.date_of_birth?.trim()) {
+      newErrors.date_of_birth = "Required";
+    } else if (!dateRegex.test(formData.date_of_birth)) {
+      newErrors.date_of_birth = "DD/MM/YYYY";
+    }
+
+    if (!formData.date_of_joining?.trim()) {
+      newErrors.date_of_joining = "Required";
+    } else if (!dateRegex.test(formData.date_of_joining)) {
+      newErrors.date_of_joining = "DD/MM/YYYY";
+    }
+
+    if (formData.aadhaar_number && formData.aadhaar_number.length !== 12) {
+      newErrors.aadhaar_number = "12 digits required";
+    }
+
+    if (
+      formData.pan_number &&
+      !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(formData.pan_number)
+    ) {
+      newErrors.pan_number = "ABCDE1234F";
+    }
+
+    if (
+      formData.bank_account_number &&
+      formData.bank_account_number.length < 9
+    ) {
+      newErrors.bank_account_number = "Invalid Account";
+    }
+
+    if (
+      formData.ifsc_code &&
+      !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.ifsc_code)
+    ) {
+      newErrors.ifsc_code = "Invalid IFSC";
+    }
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      console.log("❌ VALIDATION ERRORS:", newErrors);
+      return;
+    }
+
     try {
       setLoading(true);
 
       const data = new FormData();
 
+      // ================= FORM DATA =================
+
       Object.keys(formData).forEach((k) => {
-        data.append(k, formData[k] || "");
+        let value = formData[k] || "";
+
+        // Convert DD/MM/YYYY → YYYY-MM-DD
+        if (k === "date_of_birth" || k === "date_of_joining") {
+          value = convertDateForAPI(value);
+        }
+
+        data.append(k, value);
       });
+
+      // ================= FILES =================
 
       Object.keys(files).forEach((k) => {
         if (files[k]) {
@@ -276,38 +395,46 @@ function EditEmployeePersonalDetails() {
         }
       });
 
-      await api.put(`/api/personal-details/${emp_id}`, data, {
+      // ================= DEBUG =================
+
+      console.log("=================================");
+      console.log("📤 UPDATE EMPLOYEE");
+      console.log("Employee ID:", emp_id);
+
+      for (const [key, value] of data.entries()) {
+        console.log(key, value instanceof File ? value.name : value);
+      }
+
+      console.log("=================================");
+
+      // ================= API =================
+
+      const response = await api.put(`/api/personal-details/${emp_id}`, data, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
       });
 
+      console.log("✅ UPDATE SUCCESS:", response.data);
+
       alert("Updated Successfully");
 
       navigate("/admin/employee-details-personal/list");
     } catch (err) {
-      console.log(err);
+      console.error("❌ UPDATE ERROR:", err);
+      console.error("❌ STATUS:", err.response?.status);
+      console.error("❌ RESPONSE:", err.response?.data);
 
-      alert("Update Failed");
+      const backendMessage = err.response?.data?.message;
+
+      if (backendMessage) {
+        alert(backendMessage);
+      } else {
+        alert("Update Failed");
+      }
     } finally {
       setLoading(false);
     }
-  };
-
-  /* ================= DATE FORMAT ================= */
-
-  const formatDate = (date) => {
-    if (!date) return "";
-
-    const d = new Date(date);
-
-    const day = String(d.getDate()).padStart(2, "0");
-
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-
-    const year = d.getFullYear();
-
-    return `${day}/${month}/${year}`;
   };
 
   /* ================= LOAD ================= */
@@ -316,7 +443,9 @@ function EditEmployeePersonalDetails() {
     const load = async () => {
       try {
         const res = await api.get(`/api/personal-details/${emp_id}`);
+
         const data = res.data;
+
         console.log(data);
 
         setFormData({
@@ -363,7 +492,6 @@ function EditEmployeePersonalDetails() {
 
             <div>
               <h3>Edit Employee Personal Details</h3>
-
               <p>Update Aadhaar, PAN, Bank & Files</p>
             </div>
           </div>
@@ -458,6 +586,7 @@ function EditEmployeePersonalDetails() {
                 color="#ffc107"
                 error={errors.bank_account_number}
               />
+
               <FileField
                 label="Bank File"
                 name="bank_file"
@@ -632,8 +761,6 @@ function EditEmployeePersonalDetails() {
   0 0 0 4px rgba(59,130,246,0.16) !important;
 }
 
-
-
 .bg-dark .filePreviewName{
   background:#0f172a;
   color:#f8fafc;
@@ -800,9 +927,6 @@ function EditEmployeePersonalDetails() {
 /* =======================================================
    FILE
 ======================================================= */
-/* =======================================================
-   FILE
-======================================================= */
 
 input[type="file"]{
   width:100%;
@@ -864,22 +988,6 @@ input[type="file"]{
 
 /* PREVIEW */
 
-.previewImage{
-  width:75px;
-  height:75px;
-  object-fit:cover;
-  border-radius:12px;
-  margin-top:10px;
-}
-
-.filePreviewName{
-  margin-top:10px;
-  padding:10px 12px;
-  border-radius:12px;
-  font-size:14px;
-  font-weight:600;
-  word-break:break-word;
-}
 .previewImage{
   width:75px;
   height:75px;
@@ -1044,7 +1152,7 @@ input[type="file"]{
 
 }
 
-`}</style>
+      `}</style>
     </div>
   );
 }
